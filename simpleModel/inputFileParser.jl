@@ -1,5 +1,5 @@
 include("config64.jl")
-
+-
 module inputParser
     using ConfParser
     using config64
