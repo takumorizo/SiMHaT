@@ -3,6 +3,9 @@ include("inputFileParser.jl")
 include("phylogenyTree.jl")
 include("random.jl")
 
+"""
+uniqueFounderModel sampling script
+"""
 
 module __sampler
     using config64
@@ -28,14 +31,48 @@ module __sampler
         return lnP
     end
 
+    function existsFounder(ex::Array{I, 3},
+                           c::I, m::I,
+                           usageV::Dict{I, Array{I, 1}})::Bool where{ I <: Integer }
+        for j in usageV[m]
+            if ex[c,m,j] == 2
+                return true
+            end
+        end
+        return false
+    end
+
+    function areFoundersConsistent(B::Dict{Tuple{I,I}, I},
+                                   ex::Array{I, 3},
+                                   usageS::Dict{I,Array{I,1}},
+                                   usageV::Dict{I,Array{I,1}};
+                                   minFounder::I = 0,
+                                   maxFounder::I = 1 ) where{ I <: Integer }
+        for m in keys(usageV)
+            for j in usageV[m]
+                founderNum::I = 0
+                for c in keys(usageS)
+                    founderNum += (I)(ex[c,m,j] == 2) * (I)(B[c,m] == 3)
+                end
+                if !( minFounder <= founderNum <= maxFounder)
+                    return false
+                end
+            end
+        end
+        return true
+    end
+
     function areBlocksTree(B::Dict{Tuple{I,I}, I},
-                          c::I, m::I,
-                          usageS::Dict{I,Array{I,1}},
-                          usageV::Dict{I,Array{I,1}},
-                          positiveSet::Set{I};
-                          seeDriver::Bool = false,
-                          minX::I = 1,
-                          minY::I = 1)::Array{Bool, 1} where {I <: Integer}
+                           ex::Array{I, 3},
+                           c::I, m::I,
+                           usageS::Dict{I,Array{I,1}},
+                           usageV::Dict{I,Array{I,1}};
+                           negativeSet::Set{I} = Set([1,2]),
+                           positiveSet::Set{I} = Set([3]),
+                           minX::I = 1,
+                           minY::I = 1,
+                           minFounder::I = 0,
+                           maxFounder::I = 1)::Array{Bool, 1} where {I <: Integer}
        ans::Array{Bool,1} = [true, true]
        C::I                = length(usageS)
        M::I                = length(usageV)
@@ -47,22 +84,34 @@ module __sampler
            cluster_m::I = Ms[mm];
            blocks[cc,mm] = (I)(B[cluster_c, cluster_m] ∈ positiveSet)
        end
+       now_B::I = B[c,m]
        cIdx::I = findfirst(Cs, c)
        mIdx::I = findfirst(Ms, m)
        blocks[cIdx,mIdx] = (I)(0)
-       ans[1] = phylogenyTree.isPhylogenic(blocks, checkDriver = seeDriver, minX = minX, minY = minY)
+       B[c,m] = collect(negativeSet)[1]
+       ans[1] = ( areFoundersConsistent(B, ex, usageS, usageV,
+                                        minFounder = minFounder,
+                                        maxFounder = maxFounder )
+                  && phylogenyTree.isPhylogenic(blocks, minX = minX, minY = minY) )
        blocks[cIdx,mIdx] = (I)(1)
-       ans[2] = phylogenyTree.isPhylogenic(blocks, checkDriver = seeDriver, minX = minX, minY = minY)
+       B[c,m] = collect(positiveSet)[1]
+       ans[2] = ( areFoundersConsistent(B, ex, usageS, usageV,
+                                        minFounder = minFounder,
+                                        maxFounder = maxFounder )
+                  && phylogenyTree.isPhylogenic(blocks, minX = minX, minY = minY) )
+       B[c,m] = now_B # recover the state
        return ans
     end
 
     function isBlocksTree(B::Dict{Tuple{I,I}, I},
-                         usageS::Dict{I,Array{I,1}},
-                         usageV::Dict{I,Array{I,1}},
-                         positiveSet::Set{I};
-                         seeDriver::Bool = false,
-                         minX::I = 1,
-                         minY::I = 1)::Bool where {I <: Integer}
+                          ex::Array{I, 3},
+                          usageS::Dict{I,Array{I,1}},
+                          usageV::Dict{I,Array{I,1}},
+                          positiveSet::Set{I};
+                          minX::I = 1,
+                          minY::I = 1,
+                          minFounder::I = 0,
+                          maxFounder::I = 1)::Bool where {I <: Integer}
        C::I = length(usageS)
        M::I = length(usageV)
        blocks::Array{I, 2} = zeros(I, C, M)
@@ -73,21 +122,27 @@ module __sampler
            cluster_m::I = Ms[mm];
            blocks[cc,mm] = (I)(B[cluster_c, cluster_m] ∈ positiveSet)
        end
-       return phylogenyTree.isPhylogenic(blocks, checkDriver = seeDriver, minX = minX, minY = minY)
+       return ( areFoundersConsistent(B, ex, usageS, usageV,
+                                      minFounder = minFounder,
+                                      maxFounder = maxFounder )
+                && phylogenyTree.isPhylogenic(blocks, minX = minX, minY = minY) )
     end
 
     function isBlockValid(needsTree::Bool,
                           Z::Array{I, 2},
+                          ex::Array{I, 3},
                           usageS::Dict{I,Array{I,1}},
                           usageV::Dict{I,Array{I,1}},
                           c::I, m::I;
                           offset::I = 1,
-                          seeDriver::Bool = true,
                           minX::I = 1,
                           minY::I = 1)::Bool where {I <: Integer}
-      return (!needsTree) || (phylogenyTree.isPhylogenic(view(Z, usageS[c], usageV[m]),
-                                                         offset = offset, checkDriver = seeDriver,
-                                                         minX = minX, minY = minY))
+      return (!needsTree) || ( existsFounder(ex, c, m, usageV)
+                               &&
+                               phylogenyTree.isPhylogenic(view(Z, usageS[c], usageV[m]),
+                                                          # checkDriver = true,
+                                                          offset = offset, minX = minX, minY = minY)
+                             )
     end
 
     function lnAF(α::R, n::I)::R where {R <: Real, I <: Integer}
@@ -149,22 +204,38 @@ module __sampler
         return ans
     end
 
-    function ln_P_f_B(f::Array{R, 3},
+    function ln_P_ex_B(B::Dict{Tuple{I,I},I},
+                       ex::Array{I,3},
+                       δs::Array{R,1})::R where {I <: Integer, R <: Real}
+       ans::R = 0.0
+       J::I = size(ex, 3)
+       for (cluster, b) in B
+           (c::I, m::I) = cluster
+           for j in 1:J
+               ans += (R)(ex[c,m,j] == 2) * (R)(log(e, δs[b])) + (ex[c,m,j] == 1) * (R)(log(e, 1.0 - δs[b]))
+           end
+       end
+       return ans
+    end
+
+    function ln_P_f_B_ex(f::Array{R, 3},
                      B::Dict{Tuple{I,I},I},
+                     ex::Array{I,3},
                      βs::Array{R,2})::R where {I <: Integer, R <: Real}
         J::I = size(f,3)
         ans::R = (R)(0.0)
         for (cluster, value) in B
-            c = cluster[1]
-            m = cluster[2]
+            (c::I, m::I) = cluster
             for j in 1:J
-                ans += ln_P_beta(f[c,m,j], βs[value,1], βs[value,2])
+                b = (I)(ex[c,m,j] == 1) * value + (I)(ex[c,m,j]==2) * 4
+                ans += ln_P_beta(f[c,m,j], βs[b,1], βs[b,2])
             end
         end
         return ans
     end
 
     function ln_P_t(Z::Array{I, 2},
+                    ex::Array{I, 3},
                     usageS::Dict{I,Array{I,1}},
                     usageV::Dict{I,Array{I,1}},
                     B::Dict{Tuple{I,I},I},
@@ -174,21 +245,22 @@ module __sampler
         ans::R = (R)(0.0)
         for (cluster2D, value) in B
             (c::I, m::I) = cluster2D
-            isTree::Bool = __sampler.isBlockValid(value == 3, Z, usageS, usageV, c, m,
-                                        offset = 1, seeDriver = true, minX = minX, minY = minY)
+            isTree::Bool = __sampler.isBlockValid(value == 3, Z, ex, usageS, usageV, c, m,
+                                        offset = 1, minX = minX, minY = minY)
             ans += (R)(isTree) * ln_g + (1.0 - (R)(isTree)) * ln_1_m_g
         end
         return ans
     end
 
     function ln_P_w_B(B::Dict{Tuple{I,I},I},
-                     usageS::Dict{I,Array{I,1}},
-                     usageV::Dict{I,Array{I,1}},
-                     ln_g::R, ln_1_m_g::R,
-                     minX = 1,
-                     minY = 1)::R where {I <: Integer, R <: Real}
+                      ex::Array{I, 3},
+                      usageS::Dict{I,Array{I,1}},
+                      usageV::Dict{I,Array{I,1}},
+                      ln_g::R, ln_1_m_g::R,
+                      minX = 1,
+                      minY = 1)::R where {I <: Integer, R <: Real}
         ans::R = (R)(0.0)
-        isTree::Bool = isBlocksTree(B,usageS, usageV, Set([3]), seeDriver = false, minX = minX, minY = minY)
+        isTree::Bool = isBlocksTree(B, ex, usageS, usageV, Set([3]), minX = minX, minY = minY)
         return (R)(isTree) * ln_g + (1.0 - (R)(isTree)) * ln_1_m_g
     end
 
@@ -203,8 +275,6 @@ module __sampler
         maxVal::R = maximum(ln_p)
         return log(e, sum(exp.( (ln_p .- maxVal) ))) + maxVal
     end
-
-
 end
 
 module sampler
@@ -219,6 +289,7 @@ module sampler
         Z::Array{I, 2}
         S_s::Array{I, 1}
         S_v::Array{I, 1}
+        ex::Array{I, 3}
         f::Array{R, 3}
         B::Dict{Tuple{I,I}, I}
         usageS::Dict{I,Array{I,1}}
@@ -264,14 +335,12 @@ module sampler
         isValid::Array{Bool, 1} = [true, true]
         samp.Z[i,j] = (I)(1)
         isValid[1] = __sampler.isBlockValid(samp.B[c,m] == 3,
-                     samp.Z, samp.usageS, samp.usageV, c, m,
-                     seeDriver = true,
+                     samp.Z, samp.ex, samp.usageS, samp.usageV, c, m,
                      minX = samp.param.minXIn,
                      minY = samp.param.minYIn)
         samp.Z[i,j] = (I)(2)
         isValid[2] = __sampler.isBlockValid(samp.B[c,m] == 3,
-                     samp.Z, samp.usageS, samp.usageV, c, m,
-                     seeDriver = true,
+                     samp.Z, samp.ex, samp.usageS, samp.usageV, c, m,
                      minX = samp.param.minXIn,
                      minY = samp.param.minYIn)
 
@@ -292,7 +361,8 @@ module sampler
     function sampleF!(samp::Sampler{I, R}, c::I, m::I, j::I)::Void where {I <: Integer, R <: Real}
         prev::R = samp.lnProb
         now_F::R = samp.f[c,m,j]
-        β::Array{R,1} = samp.param.βs[ samp.B[c,m], : ]
+        at::I = (I)(samp.ex[c,m,j] == 1) * samp.B[c,m] + (I)(samp.ex[c,m,j] == 2) * 4
+        β::Array{R,1} = samp.param.βs[ at, : ]
         β[1] += sum(samp.Z[samp.usageS[c],j] .== 2)
         β[2] += sum(samp.Z[samp.usageS[c],j] .== 1)
         new_F::R = random.sampleBeta( β[1], β[2] )
@@ -300,22 +370,148 @@ module sampler
         return nothing
     end
 
+    function sampleEx!(samp::Sampler{I, R})::Void where{I <: Integer, R <: Real}
+        C::I = length(samp.usageS)
+        M::I = length(samp.usageV)
+        J::I = size(samp.Z, 2)
+        # evaluating block tree
+        blocks::Array{I, 2} = zeros(I, C, M)
+        Cs::Array{I,1}      = collect(keys(samp.usageS))
+        Ms::Array{I,1}      = collect(keys(samp.usageV))
+        for (cc,mm) in Iterators.product(1:C,1:M)
+            cluster_c::I = Cs[cc];
+            cluster_m::I = Ms[mm];
+            blocks[cc,mm] = (I)(samp.B[cluster_c, cluster_m] == 3)
+        end
+        isBlockPhylogenic::Bool = phylogenyTree.isPhylogenic(blocks,
+                                                             minX = samp.param.minXOut,
+                                                             minY = samp.param.minYOut)
 
+        ln_p::Array{R, 1} = convert.(R, [0.0, 0.0])
+        for (c,m) in Iterators.product(keys(samp.usageS), keys(samp.usageV))
+            isInnerPhylogenic::Bool = phylogenyTree.isPhylogenic(
+                                        view(samp.Z, samp.usageS[c], samp.usageV[m]),
+                                        # checkDriver = true,
+                                        offset = 1,
+                                        minX = samp.param.minXIn,
+                                        minY = samp.param.minYIn)
+            for j in 1:J
+                now_ex::I = samp.ex[c,m,j]
+                ln_p[1] = 0.0; ln_p[2] = 0.0
+                b::I = samp.B[c,m]
+                # prior probs
+                ln_p[1] += (R)(log(e, samp.param.δs[samp.B[c,m]]))
+                ln_p[2] += (R)(log(e, 1.0 - samp.param.δs[samp.B[c,m]]))
+
+                # f_c,m,j prob part
+                ln_p[1] += __sampler.ln_P_beta(samp.f[c,m,j], samp.param.βs[b,1], samp.param.βs[b,2])
+                ln_p[2] += __sampler.ln_P_beta(samp.f[c,m,j], samp.param.βs[4,1], samp.param.βs[4,2])
+
+                # tree validity part
+                for v in 1:2
+                    samp.ex[c,m,j] = v
+                    founderNum::I = 0
+                    founderConsistent::Bool = true
+                    isValid::Bool    = false
+                    isValidAll::Bool = false
+
+                    founderNum = sum((samp.ex[c,m, samp.usageV[m] ] .== 2))
+                    for m in keys(samp.usageV); for j in samp.usageV[m]
+                        founderAll::I = 0
+                        for c in keys(samp.usageS)
+                            founderAll += (I)(samp.ex[c,m,j] == 2) * (I)(samp.B[c,m] == 3)
+                        end
+                        founderConsistent &= (founderAll <= samp.param.maxFounder)
+                    end; end
+                    isValid    = !(samp.B[c,m] == 3) || ( ( 0 < founderNum ) && isInnerPhylogenic )
+                    isValidAll = isBlockPhylogenic && (founderConsistent)
+
+                    ln_p[v] += (R)(isValidAll) * (R)(samp.param.ln_G_B[1])
+                    ln_p[v] += ((R)(1.0)-(R)(isValidAll)) * (R)(samp.param.ln_G_B[2])
+
+                    ln_p[v] += (R)(isValid) * (R)(samp.param.ln_G_t[1])
+                    ln_p[v] += ((R)(1.0)-(R)(isValid)) * (R)(samp.param.ln_G_t[2])
+                end
+
+                __sampler.exp_normalize!(ln_p)
+                new_ex::I = indmax(random.sampleMultiNomial(1,ln_p))
+                samp.ex[c,m,j] = new_ex
+            end
+        end
+        return nothing
+    end
+
+    # function sampleEx!(samp::Sampler{I,R}, c::I, m::I, j::I)::Void where{I<:Integer, R <: Real}
+    #     now_ex::I = samp.ex[c,m,j]
+    #     ln_p::Array{R, 1} = convert.(R, [0.0, 0.0])
+    #     b::I = samp.B[c,m,j]
+    #     # prior probs
+    #     ln_p[1] += (R)(log(e, samp.param.δs[samp.B[c,m]]))
+    #     ln_p[2] += (R)(log(e, 1.0 - samp.param.δs[samp.B[c,m]]))
+    #
+    #     # f_c,m,j prob part
+    #     ln_p[1] += __sampler.ln_P_beta(f[c,m,j], βs[b,1], βs[b,2])
+    #     ln_p[2] += __sampler.ln_P_beta(f[c,m,j], βs[4,1], βs[4,2])
+    #
+    #     # internal tree part
+    #     isValid::Array{Bool, 1} = [false, false]
+    #     isValidAll::Array{Bool, 1} = [false, false]
+    #     samp.ex[c,m,j] = 1
+    #     isValid[1] = __sampler.isBlockValid(samp.B[c,m] == 3,
+    #                                         samp.ex,
+    #                                         samp.Z, samp.usageS, samp.usageV, c, m,
+    #                                         minX = samp.param.minXIn,
+    #                                         minY = samp.param.minYIn)
+    #     isValidAll[1] =  __sampler.isBlocksTree(samp.B, samp.ex, samp.usageS, samp.usageV,
+    #                                             Set([3]),
+    #                                             minX = samp.param.minXIn,
+    #                                             minY = samp.param.minYIn)
+    #     samp.ex[c,m,j] = 2
+    #     isValid[2] = __sampler.isBlockValid(samp.B[c,m] == 3,
+    #                                         samp.ex,
+    #                                         samp.Z, samp.usageS, samp.usageV, c, m,
+    #                                         minX = samp.param.minXIn,
+    #                                         minY = samp.param.minYIn)
+    #
+    #     isValidAll[2] =  __sampler.isBlocksTree(samp.B, samp.ex, samp.usageS, samp.usageV,
+    #                                             Set([3]),
+    #                                             minX = samp.param.minXIn,
+    #                                             minY = samp.param.minYIn)
+    #
+    #     for i in 1:2
+    #         ln_p[i] += (R)(isValidAll[i]) * (R)(samp.param.ln_G_B[1])
+    #         ln_p[i] += ((R)(1.0)-(R)(isValidAll[i])) * (R)(samp.param.ln_G_B[2])
+    #
+    #         ln_p[i] += (R)(isValid) * (R)(samp.param.ln_G_t[1])
+    #         ln_p[i] += ((R)(1.0)-(R)(isValid)) * (R)(samp.param.ln_G_t[2])
+    #     end
+    #     __sampler.exp_normalize!(ln_p)
+    #     new_ex::I = indmax(random.sampleMultiNomial(1,ln_p))
+    #     samp.Ex[c,m,j] = new_ex
+    #     return nothing
+    # end
+
+    # TODO : change sampling formula, to incorporate samp.ex !!
     function sampleB!(samp::Sampler{I, R}, c::I, m::I)::Void where {I <: Integer, R <: Real}
         now_B::I = samp.B[c,m]
-        ln_p::Array{R, 1} = convert.(R, log.(e, samp.param.λs))
+        ln_p::Array{R, 1} = convert.(R, log.(e, samp.param.λs)) # init with prior probs
         J::I = size(samp.Z, 2)
-        # f_[c,m,j] lnprob part
+
         for b in 1:3
             for j in 1:J
-                ln_p[b] -= lbeta(samp.param.βs[b,1], samp.param.βs[b,2])
-                ln_p[b] += (R)(samp.param.βs[b,1])*(R)(log(e, (R)(samp.f[c,m,j])))
-                ln_p[b] += (R)(samp.param.βs[b,2])*(R)(log(e, (R)(1.0-samp.f[c,m,j])))
+                # f_[c,m,j] lnprob part
+                at::I    = (I)(samp.ex[c,m,j] == 1) * b + (I)(samp.ex[c,m,j] == 2) * 4
+                ln_p[b] -= lbeta(samp.param.βs[at,1], samp.param.βs[at,2])
+                ln_p[b] += (R)(samp.param.βs[at,1])*(R)(log(e, (R)(samp.f[c,m,j])))
+                ln_p[b] += (R)(samp.param.βs[at,2])*(R)(log(e, (R)(1.0-samp.f[c,m,j])))
+                # e prob part
+                ln_p[b] += (R)(log(e, samp.param.δs[b]))
+                ln_p[b] += (R)(log(e, 1.0 - samp.param.δs[b]))
             end
         end
         # Block tree lnProb part
         isBlocksTree::Array{Bool,1} = [true, true, true]
-        isBlocksTree[[1,3]] = __sampler.areBlocksTree(samp.B, c, m, samp.usageS, samp.usageV, Set([3]),
+        isBlocksTree[[1,3]] = __sampler.areBlocksTree(samp.B, samp.ex, c, m, samp.usageS, samp.usageV,
                                                       minX = samp.param.minXOut,
                                                       minY = samp.param.minYOut)
         isBlocksTree[2] = isBlocksTree[1]
@@ -325,8 +521,7 @@ module sampler
             ln_p[b] += ((R)(1.0)-(R)(isBlocksTree[b])) * (R)(samp.param.ln_G_B[2])
         end
         isInnerBlockValid::Bool = __sampler.isBlockValid(samp.B[c,m] == 3,
-                                               samp.Z, samp.usageS, samp.usageV, c, m,
-                                               seeDriver = true,
+                                               samp.Z, samp.ex, samp.usageS, samp.usageV, c, m,
                                                minX = samp.param.minXIn,
                                                minY = samp.param.minYIn)
         ln_p[3] += (R)(isInnerBlockValid) * (R)(samp.param.ln_G_t[1])
@@ -351,14 +546,15 @@ module sampler
         # internal tree part
         for m in keys(post.usageV)
             isValidPost::Bool = __sampler.isBlockValid(post.B[new_S,m] == 3,
-                                             post.Z, post.usageS, post.usageV, new_S, m,
-                                             seeDriver = true,
+                                             post.Z,
+                                             post.ex,
+                                             post.usageS, post.usageV, new_S, m,
                                              minX = post.param.minXIn,
                                              minY = post.param.minYIn)
             a1 += (R)(isValidPost) * post.param.ln_G_t[1] + (1.0-(R)(isValidPost)) * post.param.ln_G_t[2]
         end
         # block tree part
-        isBlocksTree::Bool = __sampler.isBlocksTree(post.B, post.usageS, post.usageV, Set([3]),
+        isBlocksTree::Bool = __sampler.isBlocksTree(post.B, post.ex, post.usageS, post.usageV, Set([3]),
                                                    minX = post.param.minXOut,
                                                    minY = post.param.minYOut)
         a1 += (R)(isBlocksTree) * post.param.ln_G_B[1] + (1.0-(R)(isBlocksTree)) * post.param.ln_G_B[2]
@@ -374,14 +570,15 @@ module sampler
         # internal tree part
         for m in keys(prev.usageV)
             isValidPrev::Bool = __sampler.isBlockValid(prev.B[now_S,m] == 3,
-                                             prev.Z, prev.usageS, prev.usageV, now_S, m,
-                                             seeDriver = true,
+                                             prev.Z,
+                                             prev.ex,
+                                             prev.usageS, prev.usageV, now_S, m,
                                              minX = prev.param.minXIn,
                                              minY = prev.param.minYIn)
             a2 += (R)(isValidPrev) * prev.param.ln_G_t[1] + (1.0-(R)(isValidPrev)) * prev.param.ln_G_t[2]
         end
         # block tree part
-        isBlocksTree = __sampler.isBlocksTree(prev.B, prev.usageS, prev.usageV, Set([3]),
+        isBlocksTree = __sampler.isBlocksTree(prev.B, prev.ex, prev.usageS, prev.usageV, Set([3]),
                                               minX = prev.param.minXOut,
                                               minY = prev.param.minYOut)
         a2 += (R)(isBlocksTree) * prev.param.ln_G_B[1] + (1.0-(R)(isBlocksTree)) * prev.param.ln_G_B[2]
@@ -428,7 +625,10 @@ module sampler
                 b::I = indmax( random.sampleMultiNomial(1, propose.param.λs) )
                 propose.B[new_S, m] = b
                 for j in 1:J
-                    propose.f[new_S,m,j] = random.sampleBeta(propose.param.βs[b,1], propose.param.βs[b,2])
+                    propose.ex[new_S,m,j] = indmax(random.sampleMultiNomial(1,
+                                                                           [(R)(1.0-propose.param.δs[b]), propose.param.δs[b]]))
+                    at::I = (I)(propose.ex[new_S,m,j]==1) * b + (I)(propose.ex[new_S,m,j]==2) * 4
+                    propose.f[new_S,m,j]  = random.sampleBeta(propose.param.βs[at,1], propose.param.βs[at,2])
                 end
             end
         end
@@ -463,14 +663,14 @@ module sampler
         # internal tree part
         for c in keys(post.usageS)
             isValidPost::Bool = __sampler.isBlockValid(post.B[c, new_V] == 3,
-                                             post.Z, post.usageS, post.usageV, c, new_V,
-                                             seeDriver = true,
+                                             post.Z,
+                                             post.ex, post.usageS, post.usageV, c, new_V,
                                              minX = post.param.minXIn,
                                              minY = post.param.minYIn)
             b1 += (R)(isValidPost) * post.param.ln_G_t[1] + (1.0-(R)(isValidPost)) * post.param.ln_G_t[2]
         end
         # block tree part
-        isBlocksTree::Bool = __sampler.isBlocksTree(post.B, post.usageS, post.usageV, Set([3]),
+        isBlocksTree::Bool = __sampler.isBlocksTree(post.B, post.ex, post.usageS, post.usageV, Set([3]),
                                                     minX = post.param.minXOut,
                                                     minY = post.param.minYOut)
         b1 += (R)(isBlocksTree) * post.param.ln_G_B[1] + (1.0-(R)(isBlocksTree)) * post.param.ln_G_B[2]
@@ -486,14 +686,13 @@ module sampler
         # internal tree part
         for c in keys(prev.usageS)
             isValidPrev::Bool = __sampler.isBlockValid(prev.B[c, now_V] == 3,
-                                             prev.Z, prev.usageS, prev.usageV, c, now_V,
-                                             seeDriver = true,
+                                             prev.Z, prev.ex, prev.usageS, prev.usageV, c, now_V,
                                              minX = prev.param.minXIn,
                                              minY = prev.param.minYIn)
             b2 += (R)(isValidPrev) * prev.param.ln_G_t[1] + (1.0-(R)(isValidPrev)) * prev.param.ln_G_t[2]
         end
         # block tree part
-        isBlocksTree = __sampler.isBlocksTree(prev.B, prev.usageS, prev.usageV, Set([3]),
+        isBlocksTree = __sampler.isBlocksTree(prev.B, prev.ex, prev.usageS, prev.usageV, Set([3]),
                                               minX = prev.param.minXOut,
                                               minY = prev.param.minYOut)
         b2 += (R)(isBlocksTree) * prev.param.ln_G_B[1] + (1.0-(R)(isBlocksTree)) * prev.param.ln_G_B[2]
@@ -541,7 +740,10 @@ module sampler
                 b::I = indmax( random.sampleMultiNomial(1, propose.param.λs) )
                 propose.B[c, new_V] = b
                 for j in 1:J
-                    propose.f[c,new_V,j] = random.sampleBeta(propose.param.βs[b,1], propose.param.βs[b,2])
+                    propose.ex[c,new_V,j] = indmax(random.sampleMultiNomial(1,
+                                                                            [(R)(1.0-propose.param.δs[b]), propose.param.δs[b]]) )
+                    at::I = (I)(propose.ex[c,new_V,j] == 1) * b + (I)(propose.ex[c,new_V,j] == 2) * 4
+                    propose.f[c,new_V,j] = random.sampleBeta(propose.param.βs[at,1], propose.param.βs[at,2])
                 end
             end
         end
@@ -592,6 +794,8 @@ module sampler
                 sampleB!(samp, c, m)
             end
 
+            sampleEx!(samp)
+
             for (c,m) in Iterators.product(keys(samp.usageS), keys(samp.usageV))
                 for j in samp.usageV[m]
                     sampleF!(samp, c, m, j)
@@ -614,11 +818,12 @@ module sampler
         ans += __sampler.ln_P_Z(samp.Z, samp.S_s, samp.S_v, samp.f)
         ans += __sampler.ln_P_Data_Z(samp.lnPData, samp.Z)
         ans += __sampler.ln_P_B(samp.B, samp.param.λs)
-        ans += __sampler.ln_P_f_B(samp.f, samp.B, samp.param.βs)
-        ans += __sampler.ln_P_t(samp.Z, samp.usageS, samp.usageV, samp.B,
+        ans += __sampler.ln_P_ex_B(samp.B, samp.ex, samp.param.δs)
+        ans += __sampler.ln_P_f_B_ex(samp.f, samp.B, samp.ex, samp.param.βs)
+        ans += __sampler.ln_P_t(samp.Z, samp.ex, samp.usageS, samp.usageV, samp.B,
                                 samp.param.ln_G_t[1], samp.param.ln_G_t[2],
                                 samp.param.minXIn, samp.param.minYIn)
-        ans += __sampler.ln_P_w_B(samp.B, samp.usageS, samp.usageV,
+        ans += __sampler.ln_P_w_B(samp.B, samp.ex, samp.usageS, samp.usageV,
                                   samp.param.ln_G_B[1], samp.param.ln_G_B[2],
                                   samp.param.minXOut, samp.param.minYOut)
         return ans
@@ -638,6 +843,8 @@ module sampler
         # init sample/mutation wise cluster
         s_s::Array{INT, 1} = convert.(INT, collect(1:S))
         s_v::Array{INT, 1} = convert.(INT, collect(1:M))
+
+        ex::Array{REAL, 3}  = convert.(INT, fill(1, S, M, M))
         # init mutation freq for each mutation @ eaach cluster
         f::Array{REAL, 3}  = convert.(REAL,fill(0.50, S, M, M))
         # init block cluster ∈ {1,2,3}, 1:error, 2:merged, 3:tree
@@ -651,7 +858,7 @@ module sampler
         for s in 1:S; usageS[s] = [s]; end
         for m in 1:M; usageV[m] = [m]; end
 
-        samp::Sampler{INT,REAL} = Sampler{INT,REAL}(Z, s_s, s_v, f, B, usageS, [], usageV, [], lnP_D, param, 0.0)
+        samp::Sampler{INT,REAL} = Sampler{INT,REAL}(Z, s_s, s_v, ex, f, B, usageS, [], usageV, [], lnP_D, param, 0.0)
         samp.lnProb = ln_P_all(samp)
         return samp
     end
@@ -683,6 +890,7 @@ module sampler
                 yticks = (1:size(matrix,1),sortR), matrix, aspect_ratio = 1, title = title)
         hline!(rBreaks .+ 0.5)
         vline!(cBreaks .+ 0.5)
+        savefig("../debug/founderCollision.png")
     end
 
     function getMAPState(sampled)

@@ -14,7 +14,10 @@ module inputParser
         minXOut::I
         minYOut::I
 
+        maxFounder::I
+
         λs::Array{R,1} # []λ_e::R, λ_m::R, λ_t::R] frequency of error/merged/tree for each block
+        δs::Array{R,1} # freq vector for founder existence for B[c,m] = 1, 2, 3
         βs::Array{R,2}
         # β_e_0::R, β_e_1::R # beta hyper parameter for sample-with-variant frequency in error block
         # β_m_0::R, β_m_1::R # beta hyper parameter for sample-with-variant frequency in merged block
@@ -35,15 +38,25 @@ module inputParser
         minXOut  = parse(INT, String(retrieve(conf, "model", "minXOut")) )
         minYOut  = parse(INT, String(retrieve(conf, "model", "minYOut")) )
 
+        maxFounder = parse(INT, String(retrieve(conf, "model", "maxFounder")) )
+
         λ_e   = parse(REAL, String(retrieve(conf, "model", "lambda_e")) )
         λ_m   = parse(REAL, String(retrieve(conf, "model", "lambda_m")) )
         λ_t   = parse(REAL, String(retrieve(conf, "model", "lambda_t")) )
+        δ_e   = parse(REAL, String(retrieve(conf, "model", "delta_e")) )
+        δ_m   = parse(REAL, String(retrieve(conf, "model", "delta_m")) )
+        δ_t   = parse(REAL, String(retrieve(conf, "model", "delta_t")) )
+
         β_e_0 = parse(REAL, String(retrieve(conf, "model", "beta_e_0")) )
         β_e_1 = parse(REAL, String(retrieve(conf, "model", "beta_e_1")) )
         β_m_0 = parse(REAL, String(retrieve(conf, "model", "beta_m_0")) )
         β_m_1 = parse(REAL, String(retrieve(conf, "model", "beta_m_1")) )
         β_t_0 = parse(REAL, String(retrieve(conf, "model", "beta_t_0")) )
         β_t_1 = parse(REAL, String(retrieve(conf, "model", "beta_t_1")) )
+
+        β_f_0 = parse(REAL, String(retrieve(conf, "model", "beta_f_0")) )
+        β_f_1 = parse(REAL, String(retrieve(conf, "model", "beta_f_1")) )
+
 
         ln_1m_g1 = parse(REAL, String(retrieve(conf, "model", "ln_1m_g_t")) )
         ln_g1 = log(e, (REAL)(1.0) - exp(ln_1m_g1))
@@ -52,10 +65,12 @@ module inputParser
         ln_g2 = log(e, (REAL)(1.0) - exp(ln_1m_g2))
 
         return Parameters{INT,REAL}(α_s, α_v,
-                                minXIn, minYIn, minXOut, minYOut,
-                                [λ_e, λ_m, λ_t],
-                                [β_e_0 β_e_1; β_m_0 β_m_1; β_t_0 β_t_1;],
-                                [ln_g1, ln_1m_g1], [ln_g2, ln_1m_g2])
+                                    minXIn, minYIn, minXOut, minYOut,
+                                    maxFounder,
+                                    [λ_e, λ_m, λ_t],
+                                    [δ_e, δ_m, δ_t],
+                                    [β_e_0 β_e_1; β_m_0 β_m_1; β_t_0 β_t_1; β_f_0 β_f_1;],
+                                    [ln_g1, ln_1m_g1], [ln_g2, ln_1m_g2])
     end
 
     function parseInputSummary(summaryPath::String)::Array{REAL, 2}
