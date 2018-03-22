@@ -48,19 +48,44 @@ module __sampler
                                    usageV::Dict{I,Array{I,1}};
                                    minFounder::I = 0,
                                    maxFounder::I = 1 ) where{ I <: Integer }
+       return true
         for m in keys(usageV)
+            validFounderNum::I = 0
+            allTreeNum::I      = 0
             for j in usageV[m]
                 founderNum::I = 0
                 for c in keys(usageS)
                     founderNum += (I)(ex[c,m,j] == 2) * (I)(B[c,m] == 3)
+                    allTreeNum += (I)(B[c,m] == 3)
                 end
-                if !( minFounder <= founderNum <= maxFounder)
-                    return false
-                end
+                validFounderNum += (I)(minFounder <= founderNum <= maxFounder)
+            end
+            if !(allTreeNum <= validFounderNum)
+                return false
             end
         end
         return true
     end
+
+    # function areFoundersConsistent(B::Dict{Tuple{I,I}, I},
+    #                                ex::Array{I, 3},
+    #                                usageS::Dict{I,Array{I,1}},
+    #                                usageV::Dict{I,Array{I,1}};
+    #                                minFounder::I = 0,
+    #                                maxFounder::I = 1 ) where{ I <: Integer }
+    #     for m in keys(usageV)
+    #         for j in usageV[m]
+    #             founderNum::I = 0
+    #             for c in keys(usageS)
+    #                 founderNum += (I)(ex[c,m,j] == 2) * (I)(B[c,m] == 3)
+    #             end
+    #             if !( minFounder <= founderNum <= maxFounder)
+    #                 return false
+    #             end
+    #         end
+    #     end
+    #     return true
+    # end
 
     function areBlocksTree(B::Dict{Tuple{I,I}, I},
                            ex::Array{I, 3},
@@ -140,7 +165,7 @@ module __sampler
       return (!needsTree) || ( existsFounder(ex, c, m, usageV)
                                &&
                                phylogenyTree.isPhylogenic(view(Z, usageS[c], usageV[m]),
-                                                          # checkDriver = true,
+                                                          checkDriver = true,
                                                           offset = offset, minX = minX, minY = minY)
                              )
     end
@@ -206,12 +231,13 @@ module __sampler
 
     function ln_P_ex_B(B::Dict{Tuple{I,I},I},
                        ex::Array{I,3},
-                       δs::Array{R,1})::R where {I <: Integer, R <: Real}
+                       δs::Array{R,1},
+                       usageV::Dict{I,Array{I,1}})::R where {I <: Integer, R <: Real}
        ans::R = 0.0
        J::I = size(ex, 3)
        for (cluster, b) in B
            (c::I, m::I) = cluster
-           for j in 1:J
+           for j in usageV[m]
                ans += (R)(ex[c,m,j] == 2) * (R)(log(e, δs[b])) + (ex[c,m,j] == 1) * (R)(log(e, 1.0 - δs[b]))
            end
        end
@@ -221,14 +247,18 @@ module __sampler
     function ln_P_f_B_ex(f::Array{R, 3},
                      B::Dict{Tuple{I,I},I},
                      ex::Array{I,3},
-                     βs::Array{R,2})::R where {I <: Integer, R <: Real}
+                     βs::Array{R,2},
+                     usageV::Dict{I,Array{I,1}})::R where {I <: Integer, R <: Real}
         J::I = size(f,3)
         ans::R = (R)(0.0)
         for (cluster, value) in B
             (c::I, m::I) = cluster
-            for j in 1:J
+            for j in usageV[m]
                 b = (I)(ex[c,m,j] == 1) * value + (I)(ex[c,m,j]==2) * 4
                 ans += ln_P_beta(f[c,m,j], βs[b,1], βs[b,2])
+                # print("c,m,j,b : "); print(c); print(", "); print(m); print(", "); print(j);print(", "); println(b);
+                # print("beta: "); print(βs[b,1]); print(", "); println(βs[b,2]);
+                # print(f[c,m,j]); print(", diff: "); println(ln_P_beta(f[c,m,j], βs[b,1], βs[b,2]));
             end
         end
         return ans
@@ -370,7 +400,7 @@ module sampler
         return nothing
     end
 
-    function sampleEx!(samp::Sampler{I, R})::Void where{I <: Integer, R <: Real}
+    function sampleEx!(samp::Sampler{I, R}, debug::Bool = false)::Void where{I <: Integer, R <: Real}
         C::I = length(samp.usageS)
         M::I = length(samp.usageV)
         J::I = size(samp.Z, 2)
@@ -391,11 +421,21 @@ module sampler
         for (c,m) in Iterators.product(keys(samp.usageS), keys(samp.usageV))
             isInnerPhylogenic::Bool = phylogenyTree.isPhylogenic(
                                         view(samp.Z, samp.usageS[c], samp.usageV[m]),
-                                        # checkDriver = true,
+                                        checkDriver = true,
                                         offset = 1,
                                         minX = samp.param.minXIn,
                                         minY = samp.param.minYIn)
-            for j in 1:J
+            if debug
+                print("(c,m): "); print(c); print(","); print(m); print(", samp.usageV[m]: "); println(samp.usageV[m]);
+            end
+
+            for j in samp.usageV[m]
+                if debug
+                    print("j: "); println(j);
+                    print("samp.usageV[m]: "); println(samp.usageV[m]);
+                    print("samp.ex[c,m,j]: "); println(samp.ex[c,m,j]);
+                    print("samp.f[c,m,j]: "); println(samp.f[c,m,j]);
+                end
                 now_ex::I = samp.ex[c,m,j]
                 ln_p[1] = 0.0; ln_p[2] = 0.0
                 b::I = samp.B[c,m]
@@ -403,10 +443,18 @@ module sampler
                 ln_p[1] += (R)(log(e, samp.param.δs[samp.B[c,m]]))
                 ln_p[2] += (R)(log(e, 1.0 - samp.param.δs[samp.B[c,m]]))
 
+                if debug
+                    print("ln_p diff 1: "); println([(R)(log(e, samp.param.δs[samp.B[c,m]])),(R)(log(e, 1.0 - samp.param.δs[samp.B[c,m]]))]);
+                end
+
                 # f_c,m,j prob part
                 ln_p[1] += __sampler.ln_P_beta(samp.f[c,m,j], samp.param.βs[b,1], samp.param.βs[b,2])
                 ln_p[2] += __sampler.ln_P_beta(samp.f[c,m,j], samp.param.βs[4,1], samp.param.βs[4,2])
 
+                temp::Array{R,1} = deepcopy(ln_p)
+                if debug
+                    print("ln_p diff 2: "); println([__sampler.ln_P_beta(samp.f[c,m,j], samp.param.βs[b,1], samp.param.βs[b,2]),__sampler.ln_P_beta(samp.f[c,m,j], samp.param.βs[4,1], samp.param.βs[4,2])]);
+                end
                 # tree validity part
                 for v in 1:2
                     samp.ex[c,m,j] = v
@@ -416,13 +464,44 @@ module sampler
                     isValidAll::Bool = false
 
                     founderNum = sum((samp.ex[c,m, samp.usageV[m] ] .== 2))
-                    for m in keys(samp.usageV); for j in samp.usageV[m]
-                        founderAll::I = 0
-                        for c in keys(samp.usageS)
-                            founderAll += (I)(samp.ex[c,m,j] == 2) * (I)(samp.B[c,m] == 3)
-                        end
-                        founderConsistent &= (founderAll <= samp.param.maxFounder)
-                    end; end
+                    founderConsistent = __sampler.areFoundersConsistent(samp.B,
+                                                                        samp.ex,
+                                                                        samp.usageS,
+                                                                        samp.usageV,
+                                                                        maxFounder =  samp.param.maxFounder)
+
+                    # function areFoundersConsistent(B::Dict{Tuple{I,I}, I},
+                    #                                ex::Array{I, 3},
+                    #                                usageS::Dict{I,Array{I,1}},
+                    #                                usageV::Dict{I,Array{I,1}};
+                    #                                minFounder::I = 0,
+                    #                                maxFounder::I = 1 ) where{ I <: Integer }
+
+                    # for mm in keys(samp.usageV); for jj in samp.usageV[mm]
+                    #     founderAll::I = 0
+                    #     for cc in keys(samp.usageS)
+                    #         founderAll += (I)(samp.ex[cc,mm,jj] == 2) * (I)(samp.B[cc,mm] == 3)
+                    #     end
+                    #     founderConsistent &= (founderAll <= samp.param.maxFounder)
+                    # end; end
+
+                    # for mm in keys(samp.usageV)
+                    #     validFounderNum::I = 0
+                    #     allTreeNum::I      = 0
+                    #     for jj in samp.usageV[mm]
+                    #         founderNumLocal::I = 0
+                    #         for cc in keys(samp.usageS)
+                    #             founderNumLocal += (I)(samp.ex[cc,mm,jj] == 2) * (I)(samp.B[cc,mm] == 3)
+                    #             allTreeNum      += (I)(samp.B[cc,mm] == 3)
+                    #         end
+                    #         validFounderNum += (I)(founderNumLocal <= samp.param.maxFounder)
+                    #     end
+                    #     founderConsistent &= (allTreeNum <= validFounderNum)
+                    #     if !founderConsistent
+                    #         break
+                    #     end
+                    # end
+
                     isValid    = !(samp.B[c,m] == 3) || ( ( 0 < founderNum ) && isInnerPhylogenic )
                     isValidAll = isBlockPhylogenic && (founderConsistent)
 
@@ -432,7 +511,10 @@ module sampler
                     ln_p[v] += (R)(isValid) * (R)(samp.param.ln_G_t[1])
                     ln_p[v] += ((R)(1.0)-(R)(isValid)) * (R)(samp.param.ln_G_t[2])
                 end
-
+                if debug
+                    print("ln_p diff 3: "); println(ln_p .- temp);
+                    print("ln_p total : "); println(ln_p);
+                end
                 __sampler.exp_normalize!(ln_p)
                 new_ex::I = indmax(random.sampleMultiNomial(1,ln_p))
                 samp.ex[c,m,j] = new_ex
@@ -498,15 +580,15 @@ module sampler
         J::I = size(samp.Z, 2)
 
         for b in 1:3
-            for j in 1:J
+            for j in samp.usageV[m]
                 # f_[c,m,j] lnprob part
                 at::I    = (I)(samp.ex[c,m,j] == 1) * b + (I)(samp.ex[c,m,j] == 2) * 4
                 ln_p[b] -= lbeta(samp.param.βs[at,1], samp.param.βs[at,2])
                 ln_p[b] += (R)(samp.param.βs[at,1])*(R)(log(e, (R)(samp.f[c,m,j])))
                 ln_p[b] += (R)(samp.param.βs[at,2])*(R)(log(e, (R)(1.0-samp.f[c,m,j])))
                 # e prob part
-                ln_p[b] += (R)(log(e, samp.param.δs[b]))
-                ln_p[b] += (R)(log(e, 1.0 - samp.param.δs[b]))
+                ln_p[b] += (R)(samp.ex[c,m,j] == 2) * (R)(log(e, samp.param.δs[b]))
+                ln_p[b] += (R)(samp.ex[c,m,j] == 1) * (R)(log(e, 1.0 - samp.param.δs[b]))
             end
         end
         # Block tree lnProb part
@@ -520,7 +602,7 @@ module sampler
             ln_p[b] += (R)(isBlocksTree[b]) * (R)(samp.param.ln_G_B[1])
             ln_p[b] += ((R)(1.0)-(R)(isBlocksTree[b])) * (R)(samp.param.ln_G_B[2])
         end
-        isInnerBlockValid::Bool = __sampler.isBlockValid(samp.B[c,m] == 3,
+        isInnerBlockValid::Bool = __sampler.isBlockValid(true,
                                                samp.Z, samp.ex, samp.usageS, samp.usageV, c, m,
                                                minX = samp.param.minXIn,
                                                minY = samp.param.minYIn)
@@ -770,8 +852,8 @@ module sampler
     # # return the (state of MAP, iterCount, lnProb) with in this iterations
     function sampleAll!(samp::Sampler{I, R},
                         seed::I = 0,
-                        iter::I = 100000,
-                        thin::I = 100,
+                        iter::I = 20000,
+                        thin::I = 1,
                         burnin::I = 0)::Array{Tuple{Sampler{I, R}, I}, 1} where {I <:Integer, R <: Real }
         # setting the given random seed
         srand(seed)
@@ -781,21 +863,34 @@ module sampler
         end
         for count in 1:(iter+burnin)
             S::I, M::I = size(samp.Z)
+            # 0.439560 sec @ iter::I = 1000, thin::I = 10
+            # 1.819424 sec @ iter::I = 1000, thin::I = 10,  other parameter sampled when burnin::I < 10
             for (i,j) in Iterators.product(1:S,1:M)
                 sampleZ!(samp, i, j)
             end
-            for i in 1:S
-                sampleS_s!(samp, i)
-            end
-            for j in 1:M
-                sampleV_s!(samp, j)
-            end
+
+            i::I = rand(1:S)
+            sampleS_s!(samp, i)
+            # 1.863869 sec @ iter::I = 1000, thin::I = 10
+            # for i in 1:S
+            #     sampleS_s!(samp, i)
+            # end
+            j::I = rand(1:M)
+            sampleV_s!(samp, j)
+            # 2.663040 sec @ iter::I = 1000, thin::I = 10
+            # for j in 1:M
+            #     sampleV_s!(samp, j)
+            # end
+            # 10.663203 sec @ iter::I = 1000, thin::I = 10
             for (c,m) in Iterators.product(keys(samp.usageS), keys(samp.usageV))
                 sampleB!(samp, c, m)
             end
+            # 92.910485 sec!!! @ iter::I = 1000, thin::I = 10
+            # 2.314667 sec @ iter::I = 1000, thin::I = 10,  other parameter sampled when burnin::I < 10
 
             sampleEx!(samp)
 
+            # # 1.166951 sec @ iter::I = 1000, thin::I = 10
             for (c,m) in Iterators.product(keys(samp.usageS), keys(samp.usageV))
                 for j in samp.usageV[m]
                     sampleF!(samp, c, m, j)
@@ -811,21 +906,36 @@ module sampler
         return sampled
     end
 
-    function ln_P_all(samp::Sampler{I,R})::R where {I<:Integer, R<:Real}
+    function ln_P_all(samp::Sampler{I,R}, debug::Bool = false)::R where {I<:Integer, R<:Real}
         ans::R = 0.0
         ans += __sampler.ln_P_CRP(samp.usageS, samp.param.α_s)
         ans += __sampler.ln_P_CRP(samp.usageV, samp.param.α_v)
         ans += __sampler.ln_P_Z(samp.Z, samp.S_s, samp.S_v, samp.f)
         ans += __sampler.ln_P_Data_Z(samp.lnPData, samp.Z)
         ans += __sampler.ln_P_B(samp.B, samp.param.λs)
-        ans += __sampler.ln_P_ex_B(samp.B, samp.ex, samp.param.δs)
-        ans += __sampler.ln_P_f_B_ex(samp.f, samp.B, samp.ex, samp.param.βs)
+        ans += __sampler.ln_P_ex_B(samp.B, samp.ex, samp.param.δs, samp.usageV)
+        ans += __sampler.ln_P_f_B_ex(samp.f, samp.B, samp.ex, samp.param.βs, samp.usageV)
         ans += __sampler.ln_P_t(samp.Z, samp.ex, samp.usageS, samp.usageV, samp.B,
                                 samp.param.ln_G_t[1], samp.param.ln_G_t[2],
                                 samp.param.minXIn, samp.param.minYIn)
         ans += __sampler.ln_P_w_B(samp.B, samp.ex, samp.usageS, samp.usageV,
                                   samp.param.ln_G_B[1], samp.param.ln_G_B[2],
                                   samp.param.minXOut, samp.param.minYOut)
+        if debug
+            println( __sampler.ln_P_CRP(samp.usageS, samp.param.α_s))
+            println( __sampler.ln_P_CRP(samp.usageV, samp.param.α_v))
+            println( __sampler.ln_P_Z(samp.Z, samp.S_s, samp.S_v, samp.f))
+            println( __sampler.ln_P_Data_Z(samp.lnPData, samp.Z))
+            println( __sampler.ln_P_B(samp.B, samp.param.λs))
+            println( __sampler.ln_P_ex_B(samp.B, samp.ex, samp.param.δs, samp.usageV))
+            println( __sampler.ln_P_f_B_ex(samp.f, samp.B, samp.ex, samp.param.βs, samp.usageV))
+            println( __sampler.ln_P_t(samp.Z, samp.ex, samp.usageS, samp.usageV, samp.B,
+                                    samp.param.ln_G_t[1], samp.param.ln_G_t[2],
+                                    samp.param.minXIn, samp.param.minYIn))
+            println( __sampler.ln_P_w_B(samp.B, samp.ex, samp.usageS, samp.usageV,
+                                      samp.param.ln_G_B[1], samp.param.ln_G_B[2],
+                                      samp.param.minXOut, samp.param.minYOut))
+        end
         return ans
     end
 
@@ -890,7 +1000,42 @@ module sampler
                 yticks = (1:size(matrix,1),sortR), matrix, aspect_ratio = 1, title = title)
         hline!(rBreaks .+ 0.5)
         vline!(cBreaks .+ 0.5)
-        savefig("../debug/founderCollision.png")
+        # savefig("../debug/founderCollision.png")
+    end
+
+    function viewBlockParamsInHeatMap(f, usageR, rBreaks, sortR, usageC, cBreaks, sortC, title)
+        matrix = zeros(Float64, length(sortR), length(sortC))
+        R = length(sortR)
+        C = length(sortC)
+        for (r,c) in Iterators.product(keys(usageR),keys(usageC))
+            for (i,j) in Iterators.product(usageR[r],usageC[c])
+                matrix[i,j] = f[r,c,j]
+            end
+        end
+        matrix = matrix[sortR, sortC]
+        heatmap(yflip=true, xticks = (1:size(matrix,2),sortC),
+                yticks = (1:size(matrix,1),sortR), matrix, aspect_ratio = 1, title = title)
+        hline!(rBreaks .+ 0.5)
+        vline!(cBreaks .+ 0.5)
+        # savefig("../debug/founderCollision.png")
+    end
+
+    function viewBlockTypesInHeatMap(B, usageR, rBreaks, sortR, usageC, cBreaks, sortC, title)
+        matrix = zeros(Float64, length(sortR), length(sortC))
+        R = length(sortR)
+        C = length(sortC)
+        for (r,c) in Iterators.product(keys(usageR),keys(usageC))
+            for (i,j) in Iterators.product(usageR[r],usageC[c])
+                matrix[i,j] = B[r,c]
+            end
+        end
+        matrix = matrix[sortR, sortC]
+        print(matrix)
+        heatmap(yflip=true, xticks = (1:size(matrix,2),sortC),
+                yticks = (1:size(matrix,1),sortR), matrix, aspect_ratio = 1, title = title)
+        hline!(rBreaks .+ 0.5)
+        vline!(cBreaks .+ 0.5)
+        # savefig("../debug/founderCollision.png")
     end
 
     function getMAPState(sampled)
@@ -911,19 +1056,30 @@ module sampler
 
     function __pingSampler()
         samp = sampler.init("../simulationTree/err.score.txt", "../simulationTree/pat.score.txt",
-                    "../simulationTree/mat.score.txt", "./simpleModel.ini")
+                    "../simulationTree/mat.score.txt", "./uniqueFounderModel/simpleModel.ini")
         sampled = sampler.sampleAll!(samp)
         return sampled
         ## averaging Z value
         """
+        errData = samp.lnPData[:,:,1]
+        patData = samp.lnPData[:,:,2]
+        matData = samp.lnPData[:,:,3]
+        heatmap(yflip=true, errData, aspect_ratio = 1, title = "errData")
+        heatmap(yflip=true, patData, aspect_ratio = 1, title = "patData")
+        heatmap(yflip=true, matData, aspect_ratio = 1, title = "matData")
+        heatmap(yflip=true, sMax.Z, aspect_ratio = 1, title = "Z")
+
         using Plots
         pyplot()
 
-        lnProbs = []; iters   = []; for (s,c) in sampled; push!(lnProbs, s.lnProb); push!(iters,   c); end; plot(iters, lnProbs)
+        lnProbs = []; iters   = []; for (s,c) in sampled; push!(lnProbs, s.lnProb); push!(iters,   c); end; plot(iters[1000:length(iters)], lnProbs[1000:length(iters)])
 
         sMax = getMAPState(sampled)
         mat, rbreak, sortR, cbreak, sortC = sortBiClusteredMatrix(sMax.Z, sMax.usageS, sMax.usageV)
         viewMatInHeatMap(mat, rbreak, sortR, cbreak, sortC, "MAP.Z")
+        viewBlockParamsInHeatMap(sMax.f, sMax.usageS, rbreak, sortR, sMax.usageV, cbreak, sortC, "MAP.f")
+        viewBlockParamsInHeatMap(sMax.ex, sMax.usageS, rbreak, sortR, sMax.usageV, cbreak, sortC, "MAP.ex")
+        viewBlockTypesInHeatMap(sMax.B, sMax.usageS, rbreak, sortR, sMax.usageV, cbreak, sortC, "MAP.B")
 
         errData = samp.lnPData[:,:,1]
         patData = samp.lnPData[:,:,2]

@@ -80,9 +80,9 @@ module phylogenyTree
                           offset::I = 0,
                           checkDriver::Bool = false,
                           minX::I = 1, minY::I = 1)::Bool where {I <: Integer}
-            if minX == 1 || minY == 1
-                error("refactoring not done")
-            end
+            # if minX == 1 || minY == 1
+                # error("refactoring not done")
+            # end
             X,Y = size(binMat)
             if X < minX || Y < minY
                 return false

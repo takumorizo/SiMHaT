@@ -151,14 +151,18 @@ module __sampler
 
     function ln_P_f_B(f::Array{R, 3},
                      B::Dict{Tuple{I,I},I},
-                     βs::Array{R,2})::R where {I <: Integer, R <: Real}
+                     βs::Array{R,2},
+                     usageV::Dict{I,Array{I,1}})::R where {I <: Integer, R <: Real}
         J::I = size(f,3)
         ans::R = (R)(0.0)
         for (cluster, value) in B
             c = cluster[1]
             m = cluster[2]
-            for j in 1:J
+            # print("c,m : "); print(c); print(", "); println(m);
+            # print("beta: "); print(βs[value,1]); print(", "); println(βs[value,2]);
+            for j in usageV[m]
                 ans += ln_P_beta(f[c,m,j], βs[value,1], βs[value,2])
+                # print(f[c,m,j]); print(", diff: "); println(ln_P_beta(f[c,m,j], βs[value,1], βs[value,2]));
             end
         end
         return ans
@@ -324,7 +328,7 @@ module sampler
             ln_p[b] += (R)(isBlocksTree[b]) * (R)(samp.param.ln_G_B[1])
             ln_p[b] += ((R)(1.0)-(R)(isBlocksTree[b])) * (R)(samp.param.ln_G_B[2])
         end
-        isInnerBlockValid::Bool = __sampler.isBlockValid(samp.B[c,m] == 3,
+        isInnerBlockValid::Bool = __sampler.isBlockValid(true,
                                                samp.Z, samp.usageS, samp.usageV, c, m,
                                                seeDriver = true,
                                                minX = samp.param.minXIn,
@@ -568,8 +572,8 @@ module sampler
     # # return the (state of MAP, iterCount, lnProb) with in this iterations
     function sampleAll!(samp::Sampler{I, R},
                         seed::I = 0,
-                        iter::I = 100000,
-                        thin::I = 100,
+                        iter::I = 10000,
+                        thin::I = 1,
                         burnin::I = 0)::Array{Tuple{Sampler{I, R}, I}, 1} where {I <:Integer, R <: Real }
         # setting the given random seed
         srand(seed)
@@ -607,20 +611,34 @@ module sampler
         return sampled
     end
 
-    function ln_P_all(samp::Sampler{I,R})::R where {I<:Integer, R<:Real}
+    function ln_P_all(samp::Sampler{I,R}, debug::Bool = false)::R where {I<:Integer, R<:Real}
         ans::R = 0.0
         ans += __sampler.ln_P_CRP(samp.usageS, samp.param.α_s)
         ans += __sampler.ln_P_CRP(samp.usageV, samp.param.α_v)
         ans += __sampler.ln_P_Z(samp.Z, samp.S_s, samp.S_v, samp.f)
         ans += __sampler.ln_P_Data_Z(samp.lnPData, samp.Z)
         ans += __sampler.ln_P_B(samp.B, samp.param.λs)
-        ans += __sampler.ln_P_f_B(samp.f, samp.B, samp.param.βs)
+        ans += __sampler.ln_P_f_B(samp.f, samp.B, samp.param.βs, samp.usageV)
         ans += __sampler.ln_P_t(samp.Z, samp.usageS, samp.usageV, samp.B,
                                 samp.param.ln_G_t[1], samp.param.ln_G_t[2],
                                 samp.param.minXIn, samp.param.minYIn)
         ans += __sampler.ln_P_w_B(samp.B, samp.usageS, samp.usageV,
                                   samp.param.ln_G_B[1], samp.param.ln_G_B[2],
                                   samp.param.minXOut, samp.param.minYOut)
+        if debug
+            println(__sampler.ln_P_CRP(samp.usageS, samp.param.α_s))
+            println(__sampler.ln_P_CRP(samp.usageV, samp.param.α_v))
+            println(__sampler.ln_P_Z(samp.Z, samp.S_s, samp.S_v, samp.f))
+            println(__sampler.ln_P_Data_Z(samp.lnPData, samp.Z))
+            println(__sampler.ln_P_B(samp.B, samp.param.λs))
+            println(__sampler.ln_P_f_B(samp.f, samp.B, samp.param.βs, samp.usageV))
+            println(__sampler.ln_P_t(samp.Z, samp.usageS, samp.usageV, samp.B,
+                                  samp.param.ln_G_t[1], samp.param.ln_G_t[2],
+                                  samp.param.minXIn, samp.param.minYIn))
+            println(__sampler.ln_P_w_B(samp.B, samp.usageS, samp.usageV,
+                                    samp.param.ln_G_B[1], samp.param.ln_G_B[2],
+                                    samp.param.minXOut, samp.param.minYOut))
+        end
         return ans
     end
 
@@ -703,7 +721,7 @@ module sampler
 
     function __pingSampler()
         samp = sampler.init("../simulationTree/err.score.txt", "../simulationTree/pat.score.txt",
-                    "../simulationTree/mat.score.txt", "./simpleModel.ini")
+                    "../simulationTree/mat.score.txt", "./simpleModel/simpleModel.ini")
         sampled = sampler.sampleAll!(samp)
         return sampled
         ## averaging Z value
