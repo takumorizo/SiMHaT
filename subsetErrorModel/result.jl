@@ -225,57 +225,29 @@ end
 
 using sampler
 using result
-
-using Plots
-pyplot()
-@time sMax, lnProbs  = sampler.execMAP("/Users/moriyamatakuya/Dropbox/allPrograms/work/sftp_scripts/180202_SiMHaT/result/simulation/1/test.err.score.txt",
-"/Users/moriyamatakuya/Dropbox/allPrograms/work/sftp_scripts/180202_SiMHaT/result/simulation/1/test.mat.score.txt",
-"/Users/moriyamatakuya/Dropbox/allPrograms/work/sftp_scripts/180202_SiMHaT/result/simulation/1/test.pat.score.txt",
-"/Users/moriyamatakuya/Dropbox/allPrograms/work/sftp_scripts/180202_SiMHaT/src/mcmc/subsetErrorModel/simpleModel.ini",
-seed = 0, iter = 30000, thin = 1, burnin = 100)
-# @time sMax, lnProbs  = sampler.execMAP("/Users/moriyamatakuya/Dropbox/allPrograms/work/sftp_scripts/180202_SiMHaT/src/simulationTree/err.score.txt",
-# "/Users/moriyamatakuya/Dropbox/allPrograms/work/sftp_scripts/180202_SiMHaT/src/simulationTree/mat.score.txt",
-# "/Users/moriyamatakuya/Dropbox/allPrograms/work/sftp_scripts/180202_SiMHaT/src/simulationTree/pat.score.txt",
-# "/Users/moriyamatakuya/Dropbox/allPrograms/work/sftp_scripts/180202_SiMHaT/src/mcmc/subsetErrorModel/simpleModel.ini",
-# seed = 0, iter = 10000, thin = 1, burnin = 100)
-# result.viewMAP(sMax, lnProbs, "/Users/moriyamatakuya/Dropbox/allPrograms/work/sftp_scripts/180202_SiMHaT/src/mcmc//debug/")
-# @time sampled = sampler.pingSampler("/Users/moriyamatakuya/Dropbox/allPrograms/work/sftp_scripts/180202_SiMHaT/result/simulation/1/test.err.score.txt",
-# "/Users/moriyamatakuya/Dropbox/allPrograms/work/sftp_scripts/180202_SiMHaT/result/simulation/1/test.mat.score.txt",
-# "/Users/moriyamatakuya/Dropbox/allPrograms/work/sftp_scripts/180202_SiMHaT/result/simulation/1/test.pat.score.txt",
-# "/Users/moriyamatakuya/Dropbox/allPrograms/work/sftp_scripts/180202_SiMHaT/src/mcmc/subsetErrorModel/simpleModel.ini")
-# @time sampled = sampler.__pingSampler()
-# result.viewDataAll(sampled, "/Users/moriyamatakuya/Dropbox/allPrograms/work/sftp_scripts/180202_SiMHaT/src/mcmc//debug/")
-
-
-
-"""
-errData = samp.lnPData[:,:,1]
-patData = samp.lnPData[:,:,2]
-matData = samp.lnPData[:,:,3]
-heatmap(yflip=true, errData, aspect_ratio = 1, title = "errData")
-heatmap(yflip=true, patData, aspect_ratio = 1, title = "patData")
-heatmap(yflip=true, matData, aspect_ratio = 1, title = "matData")
-heatmap(yflip=true, sMax.Z, aspect_ratio = 1, title = "Z")
-
+using DocOpt
 using Plots
 pyplot()
 
-lnProbs = []; iters   = []; for (s,c) in sampled; push!(lnProbs, s.lnProb); push!(iters,   c); end; plot(iters[1000:length(iters)], lnProbs[1000:length(iters)])
+nowTime = (Dates.value(Dates.now())) #Int(Dates.now())
+cwd = pwd()
+doc = """SubsetErrorModel
 
-sMax = getMAPState(sampled)
-mat, rbreak, sortR, cbreak, sortC = sortBiClusteredMatrix(sMax.Z, sMax.usageS, sMax.usageV)
-viewMatInHeatMap(mat, rbreak, sortR, cbreak, sortC, "MAP.Z")
-viewBlockParamsInHeatMap(sMax.f, sMax.usageS, rbreak, sortR, sMax.usageV, cbreak, sortC, "MAP.f")
-viewBlockParamsInHeatMap(sMax.ex, sMax.usageS, rbreak, sortR, sMax.usageV, cbreak, sortC, "MAP.ex")
-viewBlockTypesInHeatMap(sMax.B, sMax.usageS, rbreak, sortR, sMax.usageV, cbreak, sortC, "MAP.B")
+Usage:
+    result.jl MAP <errScore> <matScore> <patScore> <iniFile> [options]
 
-errData = samp.lnPData[:,:,1]
-patData = samp.lnPData[:,:,2]
-matData = samp.lnPData[:,:,3]
-heatmap(yflip=true, errData, aspect_ratio = 1, title = "errData")
-savefig("./debug/errData.png")
-heatmap(yflip=true, patData, aspect_ratio = 1, title = "patData")
-savefig("./debug/patData.png")
-heatmap(yflip=true, matData, aspect_ratio = 1, title = "matData")
-savefig("./debug/matData.png")
+Options:
+  -o <DIR> --outDir=<DIR>  Output directory. We use current working directory if unspecified. [default: $cwd]
+  -s <SEED> --seed=<SEED>  Seed of randomness. We use current time (msec) if unspecified. [default: $nowTime]
+  -n <NUM> --number=<NUM>  Number of iteration after burnin. [default: 1000]
+  -b <BURNIN> --burnin=<BURNIN>  Number of iteration during burnin. [default: 0]
+  -t <THIN> --thin=<THIN>  Duration between sampling. [default: 1]
+  -h --help  Show this screen.
+
 """
+# println(doc)
+args = docopt(doc)
+println(args)
+@time sMax, lnProbs  = sampler.execMAP(args["<errScore>"], args["<matScore>"], args["<patScore>"], args["<iniFile>"],
+                                       seed = parse(args["--seed"]), iter = parse(args["--number"]), thin = parse(args["--thin"]), burnin = parse(args["--burnin"]))
+result.viewMAP(sMax, lnProbs, args["--outDir"])
