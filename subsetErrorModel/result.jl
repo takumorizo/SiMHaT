@@ -192,8 +192,8 @@ module result
     function viewDataAll(sampled, outputDir::String)
         pyplot()
 
-        cutoff = 100
-        lnProbs = []; iters   = []; for (s,c) in sampled; push!(lnProbs, s.lnProb); push!(iters,   c); end; plot(iters[cutoff:length(iters)], lnProbs[cutoff:length(iters)], size=(2000,2000))
+        cutoff = 200
+        lnProbs = []; iters   = []; for (s,c) in sampled; push!(lnProbs, s.lnProb); push!(iters, c); end; plot(iters[cutoff:length(iters)], lnProbs[cutoff:length(iters)], size=(2000,2000))
         savefig(outputDir * "/lnProbs.png")
 
         sMax = getMAPState(sampled)

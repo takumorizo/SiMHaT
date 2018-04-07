@@ -5,6 +5,14 @@ module inputParser
     using config64
 
     export Parameters
+    export Annealer
+
+    type Annealer{I <: Integer, R <: Real}
+        period::I
+        ln_p_generous::Array{R, 1}
+        ln_p_rigorous::Array{R, 1}
+    end
+
     type Parameters{I <: Integer, R <: Real}
         α_s::R
         α_v::R # dirichlet process hyper parameter for sample/variant
@@ -24,7 +32,7 @@ module inputParser
         ln_p_v::Array{R, 1} # error block state penalty, [prob_valid, prob_invalid]
     end
 
-    function parseConfigFile(configFile::String)::Parameters{INT, REAL}
+    function parseConfigFile(configFile::String)::Tuple{Parameters{INT, REAL}, Annealer{INT, REAL}}
         conf = ConfParse(configFile)
         parse_conf!(conf)
         println(conf)
@@ -52,12 +60,22 @@ module inputParser
         ln_1m_p_v = parse(REAL, String(retrieve(conf, "model", "ln_1m_p_v")) )
         ln_p_v    = log(e, (REAL)(1.0) - exp(ln_1m_p_v))
 
-        return Parameters{INT,REAL}(α_s, α_v,
+        period    = parse(REAL, String(retrieve(conf, "annealer", "period")) )
+
+        ln_1m_p_g = parse(REAL, String(retrieve(conf, "annealer", "ln_p_generous")) )
+        ln_p_g    = log(e, (REAL)(1.0) - exp(ln_1m_p_v))
+
+        ln_1m_p_r = parse(REAL, String(retrieve(conf, "annealer", "ln_p_rigorous")) )
+        ln_p_r    = log(e, (REAL)(1.0) - exp(ln_1m_p_v))
+
+
+        return (Parameters{INT,REAL}(α_s, α_v,
                                     [δ_s, δ_m, δ_u],
                                     [λ_smu_0 λ_smu_1; λ_e_0 λ_e_1;],
                                     [β_smu, β_e],
-                                    p_merge, p_err, p_back, p_hap, p_unique,
-                                    [ln_p_v, ln_1m_p_v])
+                                    p_merge, p_err, p_hap, p_back, p_unique,
+                                    [ln_p_v, ln_1m_p_v]),
+               Annealer{INT, REAL}(period, [ln_1m_p_g, ln_p_g], [ln_1m_p_r, ln_p_r]))
     end
 
     function parseInputSummary(summaryPath::String)::Array{REAL, 2}

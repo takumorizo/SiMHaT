@@ -312,6 +312,16 @@ module __sampler
         end
         return nothing
     end
+
+    function updatePenalty!(iter::I,
+                            ln_p_penalty::Array{R, 1},
+                            ln_p_generous::Array{R, 1},
+                            ln_p_rigorous::Array{R, 1},
+                            period::I)::Void where {I <: Integer, R <: Real}
+        (iter % period <  div(period, 2)) && (ln_p_penalty .= ln_p_generous )
+        (iter % period >= div(period, 2)) && (ln_p_penalty .= ln_p_rigorous )
+        return nothing
+    end
 end
 
 module sampler
@@ -348,25 +358,10 @@ module sampler
         treeCache::BuffPhyloMatrix{I}
         lnPData::Array{R, 3}
         param::Parameters{I, R}
+        anneal::Annealer{I, R}
         lnProb::R
     end
     export Sampler
-
-    function deepcopySampler!(from::Sampler{I, R}, to::Sampler{I, R})::Void where {I<:Integer, R <: Real}
-        to.Z = deepcopy(from.Z)
-        to.S_s = deepcopy(from.S_s)
-        to.S_v = deepcopy(from.S_v)
-        to.f = deepcopy(from.f)
-        to.B = deepcopy(from.B)
-        to.usageS = deepcopy(from.usageS)
-        to.unUsedS = deepcopy(from.unUsedS)
-        to.usageV = deepcopy(from.usageV)
-        to.unUsedV = deepcopy(from.unUsedV)
-        to.lnPData = deepcopy(from.lnPData)
-        to.param = deepcopy(from.param)
-        to.lnProb = deepcopy(from.lnProb)
-        return nothing
-    end
 
     function isValid(samp::Sampler{I, R}; debug::Bool = false)::Bool where {I <: Integer, R <: Real}
         # (debug) && (
@@ -402,6 +397,18 @@ module sampler
                                 samp.a, samp.f, samp.g, samp.u, samp.er, samp.param)
 
         ans += __sampler.ln_P_Data_Y(samp.lnPData, samp.Z, samp.H)
+        if debug
+            print("__sampler.ln_P_CRP(samp.usageS, samp.param.α_s): ");println(__sampler.ln_P_CRP(samp.usageS, samp.param.α_s))
+            print("__sampler.ln_P_er(samp.er, samp.erSet, samp.param.p_err): ");println(__sampler.ln_P_er(samp.er, samp.erSet, samp.param.p_err))
+            print("__sampler.ln_P_CRP(samp.usageV, samp.param.α_v): ");println(__sampler.ln_P_CRP(samp.usageV, samp.param.α_v))
+            print("__sampler.ln_P_B(samp.B, samp.usageS, samp.usageV, samp.param.δ_s): ");println(__sampler.ln_P_B(samp.B, samp.usageS, samp.usageV, samp.param.δ_s))
+            print("__sampler.ln_P_V(samp.Z, samp.usageS, samp.usageV, samp.B, samp.erSet, samp.treeCache, samp.param.ln_p_v): ");println(__sampler.ln_P_V(samp.Z, samp.usageS, samp.usageV, samp.B, samp.erSet, samp.treeCache, samp.param.ln_p_v))
+            print("__sampler.ln_P_a(samp.a, samp.param.p_merge): ");println(__sampler.ln_P_a(samp.a, samp.param.p_merge))
+            print("__sampler.ln_P_f(samp.f, samp.param.λ_s, samp.er): ");println(__sampler.ln_P_f(samp.f, samp.param.λ_s, samp.er))
+            print("__sampler.ln_P_g(samp.g, samp.param.β_s, samp.er): ");println(__sampler.ln_P_g(samp.g, samp.param.β_s, samp.er))
+            print("__sampler.ln_P_Y(samp.Z, samp.H, samp.S_s, samp.S_v, samp.B, samp.a, samp.f, samp.g, samp.u, samp.er, samp.param): ");println(__sampler.ln_P_Y(samp.Z, samp.H, samp.S_s, samp.S_v, samp.B, samp.a, samp.f, samp.g, samp.u, samp.er, samp.param))
+            print("__sampler.ln_P_Data_Y(samp.lnPData, samp.Z, samp.H): ");println(__sampler.ln_P_Data_Y(samp.lnPData, samp.Z, samp.H))
+        end
         return ans
     end
 
@@ -932,9 +939,14 @@ module sampler
                         burnin::I = 10)::Array{Tuple{Sampler{I, R}, I}, 1} where {I <:Integer, R <: Real }
         # setting the given random seed
         srand(seed)
+        ln_p_v_true::Array{R, 1} = samp.param.ln_p_v
         sampled::Array{ Tuple{Sampler{I,R}, I}, 1} = []
         for count in 1:(iter+burnin)
             S::I, M::I = size(samp.Z)
+            __sampler.updatePenalty(count,
+                                    samp.param.ln_p_v,
+                                    samp.anneal.ln_p_generous,
+                                    samp.anneal.ln_p_rigorous, samp.anneal.period)
             sampleZ!(samp)
             sampleH!(samp)
 
@@ -956,6 +968,7 @@ module sampler
             end
 
             if count > burnin && count % thin == 0
+                samp.param.ln_p_v .= ln_p_v_true
                 samp.lnProb = ln_P_all(samp)
                 now::Sampler{I,R} = deepcopy(samp)
                 push!(sampled, (now, count))
@@ -1005,7 +1018,7 @@ module sampler
 
     function init(errScorePath::String, patScorePath::String, matScorePath::String, paramPath::String)
         lnP_D::Array{REAL, 3}   = __sampler.parseData(errScorePath, patScorePath, matScorePath)
-        param::Parameters{INT,REAL} = inputParser.parseConfigFile(paramPath::String)
+        param::Parameters{INT,REAL}, anneal::Annealer{INT, REAL} = inputParser.parseConfigFile(paramPath::String)
         println("=========== data matrix ==========")
         println(lnP_D)
         println("==================================")
@@ -1036,7 +1049,7 @@ module sampler
         treeCache::BuffPhyloMatrix{INT} = buffPhyloMatrix.init(S, M, bufferSize = M)
 
         samp::Sampler{INT, REAL} = Sampler{INT, REAL}(Z, H, s_s, s_v, usageS, usageV, Set{INT}(), Set{INT}(),
-                                                      a, f, g, u, er, Set{INT}(),  B, treeCache, lnP_D, param, 0.0)
+                                                      a, f, g, u, er, Set{INT}(),  B, treeCache, lnP_D, param, anneal, 0.0)
         samp.lnProb = ln_P_all(samp)
         return samp
     end
