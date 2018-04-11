@@ -182,7 +182,10 @@ module result
         viewMatInHeatMap(sMax.lnPData[sortR,sortC,2], rbreak, sortR, cbreak, sortC, "mat", filePath = outputDir * "/mat.png")
         viewMatInHeatMap(sMax.lnPData[sortR,sortC,3], rbreak, sortR, cbreak, sortC, "pat", filePath = outputDir * "/pat.png")
 
-        viewMatInHeatMap(sMax.H, rbreak, sortR, cbreak, sortC, "MAP.H", filePath = outputDir * "/MAP_H.png", clim = [1,2])
+        viewMatInHeatMap(sMax.lnPData[:,:,1], rbreak, sortR, cbreak, sortC, "err", filePath = outputDir * "/err.nonSort.png")
+        viewMatInHeatMap(sMax.lnPData[:,:,2], rbreak, sortR, cbreak, sortC, "mat", filePath = outputDir * "/mat.nonSort.png")
+        viewMatInHeatMap(sMax.lnPData[:,:,3], rbreak, sortR, cbreak, sortC, "pat", filePath = outputDir * "/pat.nonSort.png")
+        viewMatInHeatMap(sMax.H[sortR,sortC], rbreak, sortR, cbreak, sortC, "MAP.H", filePath = outputDir * "/MAP_H.png", clim = [1,2])
         viewFInHeatMap(sMax.f, sMax.usageS, rbreak, sortR, sMax.usageV, cbreak, sortC, "MAP.f", filePath = outputDir * "/MAP_f.png")
         viewUInHeatMap(sMax.u, sMax.usageS, rbreak, sortR, sMax.usageV, cbreak, sortC, "MAP.u", filePath = outputDir * "/MAP_u.png")
         viewAInHeatMap(sMax.a, sMax.usageS, rbreak, sortR, sMax.usageV, cbreak, sortC, "MAP.a", filePath = outputDir * "/MAP_a.png")

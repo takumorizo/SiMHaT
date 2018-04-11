@@ -103,6 +103,15 @@ module __sampler
             end
             ans = ans && (!(numNonUnique > 0 && numUnique > 0))
         end
+        for m in keys(usageV)
+            numShared::I = 0
+            numMerged::I = 0
+            for c in keys(usageS)
+                numShared += (I)(B[c,m] == 1)
+                numMerged += (I)(B[c,m] == 2)
+            end
+            ans = ans && ( (numMerged == 0) || (numShared > 0 &&  numMerged > 0) )
+        end
         return ans
     end
 
@@ -346,6 +355,8 @@ module sampler
         f::Array{R, 1}  # freq of mutation for each col
         g::Array{I, 1}  # haplotype for each col
         u::Array{I, 1}  # u[j] : an unique sample having mutation j
+
+        p_err::R        # A frequency in which mutation is false positive.
         er::Array{I, 1} # er[j] == 1 : not error, er[j] == 2 : error
         erSet::Set{I}   # {j | er[j] == 2}
 
@@ -382,7 +393,8 @@ module sampler
         ans::R = 0.0
         S::I, M::I = size(samp.Z)
         ans += __sampler.ln_P_CRP(samp.usageS, samp.param.α_s)
-        ans += __sampler.ln_P_er(samp.er, samp.erSet, samp.param.p_err)
+        ans += __sampler.ln_P_beta(samp.p_err, samp.param.γ_e[1], samp.param.γ_e[2])
+        ans += __sampler.ln_P_er(samp.er, samp.erSet, samp.p_err)
         ans += __sampler.ln_P_CRP(samp.usageV, samp.param.α_v)
         ans += __sampler.ln_P_B(samp.B, samp.usageS, samp.usageV, samp.param.δ_s)
         ans += __sampler.ln_P_V(samp.Z, samp.usageS, samp.usageV, samp.B,
@@ -399,7 +411,7 @@ module sampler
         ans += __sampler.ln_P_Data_Y(samp.lnPData, samp.Z, samp.H)
         if debug
             print("__sampler.ln_P_CRP(samp.usageS, samp.param.α_s): ");println(__sampler.ln_P_CRP(samp.usageS, samp.param.α_s))
-            print("__sampler.ln_P_er(samp.er, samp.erSet, samp.param.p_err): ");println(__sampler.ln_P_er(samp.er, samp.erSet, samp.param.p_err))
+            print("__sampler.ln_P_er(samp.er, samp.erSet, samp.p_err): ");println(__sampler.ln_P_er(samp.er, samp.erSet, samp.p_err))
             print("__sampler.ln_P_CRP(samp.usageV, samp.param.α_v): ");println(__sampler.ln_P_CRP(samp.usageV, samp.param.α_v))
             print("__sampler.ln_P_B(samp.B, samp.usageS, samp.usageV, samp.param.δ_s): ");println(__sampler.ln_P_B(samp.B, samp.usageS, samp.usageV, samp.param.δ_s))
             print("__sampler.ln_P_V(samp.Z, samp.usageS, samp.usageV, samp.B, samp.erSet, samp.treeCache, samp.param.ln_p_v): ");println(__sampler.ln_P_V(samp.Z, samp.usageS, samp.usageV, samp.B, samp.erSet, samp.treeCache, samp.param.ln_p_v))
@@ -709,13 +721,29 @@ module sampler
         return nothing
     end
 
+    function sampleP_err!(samp::Sampler{I, R})::Void where {I <: Integer, R <: Real}
+        # prev_p_err::R = samp.p_err      # debug
+        # prev_p_all::R = ln_P_all(samp)  # debug
+        γ_e = [0.0, 0.0]
+        γ_e .= samp.param.γ_e
+        γ_e[1] += (R)(length(samp.erSet))
+        γ_e[2] += (R)(length(samp.er) - length(samp.erSet))
+        samp.p_err = random.sampleBeta(γ_e[1], γ_e[2])
+        # next_p_err::R = samp.p_err      # debug
+        # next_p_all::R = ln_P_all(samp)  # debug
+        # prev_p_beta::R = __sampler.ln_P_beta(prev_p_err, γ_e[1], γ_e[2]) # debug
+        # next_p_beta::R = __sampler.ln_P_beta(next_p_err, γ_e[1], γ_e[2]) # debug
+        # @assert abs( (next_p_all - prev_p_all) - (next_p_beta - prev_p_beta) ) < 0.0001 # debug
+        return nothing
+    end
+
     function sampleS_v!(samp::Sampler{I, R}, j::I)::Void where {I <: Integer, R <: Real}
         prevCluster::I = samp.S_v[j]
         prevEr::I = samp.er[j]
         prevF::R  = samp.f[j]
         prevBs::Dict{Tuple{I,I}, I} = deepcopy(samp.B)
 
-        nextEr::I = indmax( random.sampleMultiNomial(1, [1.0 - samp.param.p_err, samp.param.p_err]) )
+        nextEr::I = indmax( random.sampleMultiNomial(1, [1.0 - samp.p_err, samp.p_err]) )
         nextCluster::I = 0
         (nextEr==1) && (nextCluster = __sampler.sampleCRP(samp.S_v[j], samp.usageV, samp.unUsedV, samp.param.α_v) )
         (nextEr==2) && (nextCluster = 0)
@@ -829,61 +857,6 @@ module sampler
     end
 
 
-    # Update S_v[j], er[j], B[:,S_v[j]], f[j] by metropolis-Hasting update
-    # function sampleS_v!(samp::Sampler{I, R}, j::I)::Void where {I <: Integer, R <: Real}
-    #     prevCluster::I = samp.S_v[j]
-    #     prevEr::I = samp.er[j]
-    #     prevF::R  = samp.f[j]
-    #     prevBs::Dict{Tuple{I,I}, I} = Dict{Tuple{I,I}, I}()
-    #
-    #     nextEr::I = indmax( random.sampleMultiNomial(1, [1.0 - samp.param.p_err, samp.param.p_err]) )
-    #     nextCluster::I = 0
-    #     (nextEr==1) && (nextCluster =__sampler.sampleCRP(samp.S_v[j], samp.usageV, samp.unUsedV, samp.param.α_v) )
-    #     (nextEr==2) && (nextCluster = 0 )
-    #     nextF::R  = random.sampleBeta( samp.param.λ_s[nextEr, 1], samp.param.λ_s[nextEr, 2] )
-    #     nextBs::Dict{Tuple{I,I}, I} = Dict{Tuple{I,I}, I}()
-    #     (   # init prevBs, nextBs
-    #         for c in keys(samp.usageS);
-    #             prevBs[c, prevCluster] = samp.B[c, prevCluster];
-    #             (nextEr != 2) && (nextBs[c, nextCluster] = indmax( random.sampleMultiNomial(1, samp.param.δ_s) ));
-    #             (nextEr == 2) && (nextBs[c, nextCluster] = 4);
-    #         end
-    #     )
-    #     accPrev::R = 0.0
-    #     (   # acc from prev S_s, B related
-    #         accPrev += __sampler.ln_P_V(samp.Z, samp.usageS, samp.usageV, samp.B, samp.erSet,
-    #                                     samp.treeCache, samp.param.ln_p_v);
-    #         accPrev += __sampler.ln_P_Y(samp.Z, samp.H, samp.S_s, samp.S_v, samp.B, samp.a, samp.f,
-    #                                     samp.g, samp.u, samp.er, samp.param, rangeV = j:j);
-    #     )
-    #     accNext::R = 0.0
-    #     (   # update prev to next state
-    #         __sampler.updateSubset!(j, prevEr, nextEr, samp.erSet, samp.er);
-    #         __sampler.updateCacheInError!(j, prevEr, nextEr, view(samp.Z, :, j).-1, samp.treeCache);
-    #         __sampler.updateCluster!(prevCluster, nextCluster, samp.S_v, samp.usageV, samp.unUsedV, j);
-    #         for (c,m) in keys(prevBs);  (m ∉ keys(samp.usageV)) && pop!(samp.B, (c,m)); end;
-    #         for (c,m) in keys(nextBs);  samp.B[c,m] = nextBs[c,m]; end;
-    #         samp.f[j] = nextF;
-    #         buffPhyloMatrix.update!(samp.treeCache, samp.B, samp.usageS, samp.usageV);
-    #         accNext += __sampler.ln_P_V(samp.Z, samp.usageS, samp.usageV, samp.B, samp.erSet,
-    #                                     samp.treeCache, samp.param.ln_p_v);
-    #         accNext += __sampler.ln_P_Y(samp.Z, samp.H, samp.S_s, samp.S_v, samp.B, samp.a, samp.f,
-    #                                     samp.g, samp.u, samp.er, samp.param, rangeV = j:j);
-    #     )
-    #
-    #     accRate::R = min(1.0, exp(accNext - accPrev)) # select prev/next
-    #     if rand() < accRate # rejected and revert to a previous state
-    #         __sampler.updateSubset!(j, nextEr, prevEr, samp.erSet, samp.er)
-    #         __sampler.updateCacheInError!(j, nextEr, prevEr, view(samp.Z, :, j).-1, samp.treeCache)
-    #         __sampler.updateCluster!(nextCluster, prevCluster, samp.S_v, samp.usageV, samp.unUsedV, j)
-    #         for (c,m) in keys(nextBs);  (m ∉ keys(samp.usageV)) && pop!(samp.B, (c,m));       end;
-    #         for (c,m) in keys(prevBs);  samp.B[c,m] = prevBs[c,m]; end;
-    #         samp.f[j]  = prevF
-    #         buffPhyloMatrix.update!(samp.treeCache, samp.B, samp.usageS, samp.usageV)
-    #     end
-    #     return nothing
-    # end
-
     function sampleMAP!(samp::Sampler{I, R};
                         seed::I = 0,
                         iter::I = 100000,
@@ -903,6 +876,7 @@ module sampler
                 sampleS_s!(samp, i)
             end
 
+            sampleP_err!(samp)
             for j in 1:M
                 sampleS_v!(samp, j)
             end
@@ -1040,6 +1014,7 @@ module sampler
         f::Array{REAL,1} = convert.(REAL,fill(0.90, M)) # init mutation freq for each mutation
         g::Array{INT, 1} = convert.(INT, fill(1, M))    # init haplotype for each mutation
         u::Array{INT, 1} = convert.(INT, fill(1, M))    # init mutation to unique sample indicator
+        p_err::REAL      = 0.05                         # init false positive mutation rate
         er::Array{INT,1} = convert.(INT, fill(1, M))    # init error indicator for each mutation
 
         # init block cluster ∈ {1,2,3,4}, 1:shared, 2:meged, 3:unique, 4:error
@@ -1049,7 +1024,7 @@ module sampler
         treeCache::BuffPhyloMatrix{INT} = buffPhyloMatrix.init(S, M, bufferSize = M)
 
         samp::Sampler{INT, REAL} = Sampler{INT, REAL}(Z, H, s_s, s_v, usageS, usageV, Set{INT}(), Set{INT}(),
-                                                      a, f, g, u, er, Set{INT}(),  B, treeCache, lnP_D, param, anneal, 0.0)
+                                                      a, f, g, u, p_err, er, Set{INT}(),  B, treeCache, lnP_D, param, anneal, 0.0)
         samp.lnProb = ln_P_all(samp)
         return samp
     end

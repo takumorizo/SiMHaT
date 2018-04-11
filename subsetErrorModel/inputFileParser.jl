@@ -24,8 +24,10 @@ module inputParser
         β_s::Array{R, 1}
         # β_smu::R,  # ber hyper parameter for haplotype in shared/merge/unique block
         # β_e::R     # ber hyper parameter for haplotype in error block
+        γ_e::Array{R, 1}
+        # γ_e,  # beta hyper parameter for false positive mutation rate.
+
         p_merge::R
-        p_err::R
         p_hap::R
         p_back::R
         p_unique::R
@@ -51,8 +53,10 @@ module inputParser
         β_smu = parse(REAL, String(retrieve(conf, "model", "beta_smu")) )
         β_e   = parse(REAL, String(retrieve(conf, "model", "beta_e")) )
 
+        γ_e_0 = parse(REAL, String(retrieve(conf, "model", "gamma_e_0")) )
+        γ_e_1 = parse(REAL, String(retrieve(conf, "model", "gamma_e_1")) )
+
         p_merge   = parse(REAL, String(retrieve(conf, "model", "p_merge")) )
-        p_err     = parse(REAL, String(retrieve(conf, "model", "p_err")) )
         p_hap     = parse(REAL, String(retrieve(conf, "model", "p_hap")) )
         p_back    = parse(REAL, String(retrieve(conf, "model", "p_back")) )
         p_unique  = parse(REAL, String(retrieve(conf, "model", "p_unique")) )
@@ -72,8 +76,8 @@ module inputParser
         return (Parameters{INT,REAL}(α_s, α_v,
                                     [δ_s, δ_m, δ_u],
                                     [λ_smu_0 λ_smu_1; λ_e_0 λ_e_1;],
-                                    [β_smu, β_e],
-                                    p_merge, p_err, p_hap, p_back, p_unique,
+                                    [β_smu, β_e], [γ_e_0, γ_e_1],
+                                    p_merge, p_hap, p_back, p_unique,
                                     [ln_p_v, ln_1m_p_v]),
                Annealer{INT, REAL}(period, [ln_1m_p_g, ln_p_g], [ln_1m_p_r, ln_p_r]))
     end
