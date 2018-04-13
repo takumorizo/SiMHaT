@@ -1,3 +1,4 @@
+include("include.jl")
 Include("buffPhyloMatrix.jl")
 Include("sampler.jl")
 
@@ -232,12 +233,13 @@ using DocOpt
 using Plots
 pyplot()
 
+
 nowTime = (Dates.value(Dates.now())) #Int(Dates.now())
 cwd = pwd()
 doc = """SubsetErrorModel
 
 Usage:
-    result.jl MAP <errScore> <matScore> <patScore> <iniFile> [options]
+    main.jl MAP <errScore> <matScore> <patScore> <iniFile> [options]
 
 Options:
   -o <DIR> --outDir=<DIR>  Output directory. We use current working directory if unspecified. [default: $cwd]

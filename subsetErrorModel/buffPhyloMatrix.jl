@@ -1,4 +1,4 @@
-include("phyloMatrix.jl")
+Include("phyloMatrix.jl")
 
 module __buffPhyloMatrix
     function binaryArrayToInt(v::AbstractArray{I,1}; ascend::Bool = true)::I where {I <: Integer}

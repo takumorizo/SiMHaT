@@ -1,4 +1,4 @@
-include("phylogenyTree.jl")
+Include("phylogenyTree.jl")
 
 module __sortingCache2D
     # a == b

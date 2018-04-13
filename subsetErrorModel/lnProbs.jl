@@ -1,4 +1,4 @@
-include("config64.jl")
+Include("config64.jl")
 
 module lnProbs
     using config64

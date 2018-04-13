@@ -1,7 +1,7 @@
-include("config64.jl")
-include("inputFileParser.jl")
-include("random.jl")
-include("buffPhyloMatrix.jl")
+Include("config64.jl")
+Include("inputFileParser.jl")
+Include("random.jl")
+Include("buffPhyloMatrix.jl")
 
 """
 subsetErrorModel sampling script

@@ -1,4 +1,4 @@
-include("sortingCache2D.jl")
+Include("sortingCache2D.jl")
 
 module __phyloMatrix
     using sortingCache2D

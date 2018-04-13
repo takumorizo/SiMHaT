@@ -1,7 +1,8 @@
-include("phylogenyTree.jl")
-include("sortingCache2D.jl")
-include("phyloMatrix.jl")
-include("buffPhyloMatrix.jl")
+include("include.jl")
+Include("phylogenyTree.jl")
+Include("sortingCache2D.jl")
+Include("phyloMatrix.jl")
+Include("buffPhyloMatrix.jl")
 
 module __phylogenyTreeTest
     function makeTreeMatrixRandomly!(mat::Array{Int, 2}, rangeX, rangeY, p = 0.5, divRange=1:3)::Void
