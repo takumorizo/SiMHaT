@@ -2,9 +2,11 @@ Include("config64.jl")
 Include("inputFileParser.jl")
 Include("random.jl")
 Include("buffPhyloMatrix.jl")
+Include("tableGraph.jl")
+Include("distanceParser.jl")
 
 """
-subsetErrorModel sampling script
+ddSubsetErrorModel sampling script
 """
 
 module __sampler
@@ -13,6 +15,7 @@ module __sampler
     using Distributions
     using buffPhyloMatrix
     using random
+    using tableGraph
 
     function parseData(errScorePath::String,
                        patScorePath::String,
@@ -29,6 +32,70 @@ module __sampler
             lnP[s,m,3] = patScore[s,m]
         end
         return lnP
+    end
+
+    # #TODO: this is a temporaly function.
+    # function setDistance(errScorePath::String,
+    #                      patScorePath::String,
+    #                      matScorePath::String,
+    #                      alpha::REAL = 0.1,
+    #                      thresBF::REAL = 0.0)::Array{REAL, 2}
+    #     errScore::Array{REAL, 2} = inputParser.parseInputSummary(errScorePath)
+    #     matScore::Array{REAL, 2} = inputParser.parseInputSummary(matScorePath)
+    #     patScore::Array{REAL, 2} = inputParser.parseInputSummary(patScorePath)
+    #
+    #     BFPat::Array{REAL, 2} = patScore .- errScore
+    #     BFMat::Array{REAL, 2} = matScore .- errScore
+    #     BF::Array{REAL, 2}    = max.(BFPat, BFMat)
+    #
+    #     S, M = size(errScore)
+    #     mutMat::Array{INT, 2} = map(BF) do x
+    #        if x > thresBF
+    #            return 1
+    #        else
+    #            return 0
+    #        end
+    #    end
+    #    ans::Array{REAL, 2} = zeros(REAL, S, S)
+    #    for (from,to) in Iterators.product(1:S,1:S)
+    #        # dist::REAL = 0.0
+    #        # for m in 1:M
+    #        #     dist += (REAL)( (mutMat[from, m] != mutMat[to, m]) )
+    #        # end
+    #        # ans[to, from] = dist / S
+    #        ans[to, from] = 1.0
+    #    end
+    #    for i in 1:S
+    #        ans[i, i] = alpha
+    #    end
+    #    return ans
+    # end
+
+    function exp_normalize!(ln_p::Array{R,1})::Void where {R <: Real}
+        ln_p .= (ln_p .- maximum(ln_p))
+        ln_p .= exp.(ln_p)
+        ln_p .= ln_p ./ sum(ln_p)
+        return nothing
+    end
+
+    function log_sum_exp(ln_p::Array{R,1})::R where {R <: Real}
+        maxVal::R = maximum(ln_p)
+        return log(e, sum(exp.( (ln_p .- maxVal) ))) + maxVal
+    end
+
+    function ln_P_Link(L::TableGraph{I, R})::R where {I <: Integer, R <: Real}
+        ans::R = 0.0
+        ln_p = zeros(R, L.V)
+        for from in 1:L.V
+            ln_p .= 0.0
+            ln_p .= log.(e, L.W[:, from])
+            exp_normalize!(ln_p)
+            ln_p .= log.(e, ln_p)
+            for to in 1:L.V
+                ans += L.E[to, from] * ln_p[to]
+            end
+        end
+        return ans
     end
 
     function ln_P_CRP(usage::Dict{I,Array{I,1}}, α::R)::R where {R <: Real, I <: Integer}
@@ -213,18 +280,6 @@ module __sampler
         return ans
     end
 
-    function exp_normalize!(ln_p::Array{R,1})::Void where {R <: Real}
-        ln_p .= (ln_p .- maximum(ln_p))
-        ln_p .= exp.(ln_p)
-        ln_p .= ln_p ./ sum(ln_p)
-        return nothing
-    end
-
-    function log_sum_exp(ln_p::Array{R,1})::R where {R <: Real}
-        maxVal::R = maximum(ln_p)
-        return log(e, sum(exp.( (ln_p .- maxVal) ))) + maxVal
-    end
-
     function setNumsCandidates(usage::Dict{I, Array{I, 1}}, unUsed::Set{I},
                                nowCluster::I, α::R;
                                rmIrrerevant::Bool = true)::Tuple{Array{R, 1}, Array{I, 1}} where {I <: Integer, R <: Real}
@@ -283,14 +338,6 @@ module __sampler
             (nextCluster != 0) && pop!(unUsed, nextCluster)
         end
 
-        # for elem in unUsed
-        #     if elem ∈ keys(usage)
-        #         println(unUsed)
-        #         println(usage)
-        #         error("invalid update found 2")
-        #     end
-        # end
-
         return nothing
     end
 
@@ -331,6 +378,58 @@ module __sampler
         (iter % period >= div(period, 2)) && (ln_p_penalty .= ln_p_rigorous )
         return nothing
     end
+
+    function sampleLink(D::Array{R, 2}, i::I) where{I <: Integer, R <: Real}
+        @assert size(D)[1] == size(D)[2]
+        ln_p::Array{R, 1} = log.(e, D[:, i])
+        __sampler.exp_normalize!(ln_p)
+        return indmax( random.sampleMultiNomial(1, ln_p) )
+    end
+
+    function rmCluster!(S::Set{I}, usage::Dict{I, Array{I, 1}}, unused::Set{I}, S_s::Array{I, 1})::I where {I <: Integer}
+        if length(S) > 0
+            i::I = first(S)
+            k::I = S_s[i]
+            for n in usage[k]
+                S_s[n] = -1
+            end
+            pop!(usage, k)
+            push!(unused, k)
+            return k
+        else
+            return -1
+        end
+    end
+
+    function addCluster!(S::Set{I}, usage::Dict{I, Array{I, 1}}, unused::Set{I}, S_s::Array{I, 1})::I where {I <: Integer}
+        if length(S) > 0
+            i::I = first(S)
+            k::I = pop!(unused)
+            usage[k] = collect(S)
+            for n in S
+                S_s[n] = k
+            end
+            return k
+        else
+            return -1
+        end
+    end
+
+    function updateSsByGroupDiff!(S_pp::Set{I}, S_pn::Set{I}, S_np::Set{I}, S_nn::Set{I},
+                                  usageS::Dict{I, Array{I, 1}},
+                                  unUsedS::Set{I}, S_s::Array{I, 1})::Tuple{Array{I, 1}, Array{I, 1}} where {I <: Integer}
+        d1::I = rmCluster!(S_pp, usageS, unUsedS, S_s)
+        d2::I = rmCluster!(S_pn, usageS, unUsedS, S_s)
+        c1::I = addCluster!(S_np, usageS, unUsedS, S_s)
+        c2::I = addCluster!(S_nn, usageS, unUsedS, S_s)
+        total::I = 0
+        for k in keys(usageS)
+            total += length(usageS[k])
+        end
+        # @assert minimum(S_s) >= 0
+        # @assert total == length(S_s)
+        return (filter(x -> x > -1, [d1, d2]), filter(x -> x > -1, [c1, c2]) )
+    end
 end
 
 module sampler
@@ -339,10 +438,14 @@ module sampler
     using __sampler
     using random
     using buffPhyloMatrix
+    using tableGraph
+    using distanceParser
 
     type Sampler{I,R}
         Z::Array{I, 2} # Z == 1 err, Z == 2 mutation
         H::Array{I, 2} # H == 1 mat, H == 2 pat
+
+        L::TableGraph{I} # Table Link graph
 
         S_s::Array{I, 1}
         S_v::Array{I, 1}
@@ -375,16 +478,6 @@ module sampler
     export Sampler
 
     function isValid(samp::Sampler{I, R}; debug::Bool = false)::Bool where {I <: Integer, R <: Real}
-        # (debug) && (
-        #     print("isMainValid: "); println(__sampler.isMainValid(samp.usageS, samp.usageV, samp.B));
-        #     print("isErrorValid: "); println(__sampler.isErrorValid(samp.B, samp.usageS, samp.usageV, samp.erSet, samp.treeCache, blockType = 1, debug = debug));
-        #     println(samp.treeCache.phylo.cache.LLLeft);
-        #     println(samp.treeCache.phylo.cache.LLRight);
-        #     println(samp.treeCache.phylo.cache.sortedCols);
-        #     println(samp.treeCache.phylo.cache.matrix);
-        #     println(samp.treeCache.phylo.Ly);
-        #     println(samp.treeCache.phylo.Lmin);
-        # )
         return  __sampler.isMainValid(samp.usageS, samp.usageV, samp.B) &&
                 __sampler.isErrorValid(samp.B, samp.usageS, samp.usageV, samp.erSet, samp.treeCache, blockType = 1)
     end
@@ -392,7 +485,7 @@ module sampler
     function ln_P_all(samp::Sampler{I,R}, debug::Bool = false)::R where {I<:Integer, R<:Real}
         ans::R = 0.0
         S::I, M::I = size(samp.Z)
-        ans += __sampler.ln_P_CRP(samp.usageS, samp.param.α_s)
+        ans += __sampler.ln_P_Link(samp.L)
         ans += __sampler.ln_P_beta(samp.p_err, samp.param.γ_e[1], samp.param.γ_e[2])
         ans += __sampler.ln_P_er(samp.er, samp.erSet, samp.p_err)
         ans += __sampler.ln_P_CRP(samp.usageV, samp.param.α_v)
@@ -410,7 +503,7 @@ module sampler
 
         ans += __sampler.ln_P_Data_Y(samp.lnPData, samp.Z, samp.H)
         if debug
-            print("__sampler.ln_P_CRP(samp.usageS, samp.param.α_s): ");println(__sampler.ln_P_CRP(samp.usageS, samp.param.α_s))
+            print("__sampler.ln_P_Link(samp.L): ");println(__sampler.ln_P_Link(samp.L))
             print("__sampler.ln_P_er(samp.er, samp.erSet, samp.p_err): ");println(__sampler.ln_P_er(samp.er, samp.erSet, samp.p_err))
             print("__sampler.ln_P_CRP(samp.usageV, samp.param.α_v): ");println(__sampler.ln_P_CRP(samp.usageV, samp.param.α_v))
             print("__sampler.ln_P_B(samp.B, samp.usageS, samp.usageV, samp.param.δ_s): ");println(__sampler.ln_P_B(samp.B, samp.usageS, samp.usageV, samp.param.δ_s))
@@ -459,17 +552,6 @@ module sampler
                 if samp.er[j] == 2
                     buffPhyloMatrix.edit!(samp.treeCache, i, j, samp.Z[i,j]-1)
                 end
-                # lnProbNext = ln_P_all(samp)
-                # if abs( (lnProbPrev - lnProbNext) - ( ln_p_temp[now_Z] - ln_p_temp[new_Z]) ) > 0.0001
-                #     print("(lnProbPrev - lnProbNext): "); println((lnProbPrev - lnProbNext))
-                #     print("(lnProbPrev): "); println(lnProbPrev)
-                #     print("(lnProbNext): "); println(lnProbNext)
-                #     print("(ln_p[now_Z]) - ln_p[new_Z]): "); println(ln_p_temp[now_Z] - ln_p_temp[new_Z])
-                #     print("(ln_p[now_Z]): "); println(ln_p_temp[now_Z])
-                #     print("(ln_p[new_Z]): "); println(ln_p_temp[new_Z])
-                #     print("(ln_p): "); println(ln_p_temp)
-                #     @assert abs( (lnProbPrev - lnProbNext) - (log(e, ln_p[now_Z]) - log(e, ln_p[new_Z])) ) < 0.0001
-                # end
             end
         end
         return nothing
@@ -493,22 +575,6 @@ module sampler
                 end
                 __sampler.exp_normalize!(ln_p)
                 samp.H[i,j] = indmax( random.sampleMultiNomial(1, ln_p) )
-
-                # if abs( (now_lnP - new_lnP) - ( ln_p_temp[now_H] - ln_p_temp[new_H]) ) > 0.0001
-                #     print("(now_lnP - new_lnP): "); println((now_lnP - new_lnP))
-                #     print("(now_lnP): "); println(now_lnP)
-                #     print("(new_lnP): "); println(new_lnP)
-                #     print("(ln_p[now_H]) - ln_p[new_H]): "); println(ln_p_temp[now_H] - ln_p_temp[new_H])
-                #     print("(ln_p[now_H]): "); println(ln_p_temp[now_H])
-                #     print("(ln_p[new_H]): "); println(ln_p_temp[new_H])
-                #     print("(ln_p): "); println(ln_p_temp)
-                #     print("Z");     println(samp.Z[i,j])
-                #     print("now_H"); println(now_H)
-                #     print("new_H"); println(new_H)
-                #     print("B"); println(samp.B[samp.S_s[i],samp.S_v[j]])
-                #     println(abs( (now_lnP - new_lnP) - ( ln_p_temp[now_H] - ln_p_temp[new_H]) ))
-                #     @assert abs( (now_lnP - new_lnP) - ( ln_p_temp[now_H] - ln_p_temp[new_H]) ) < 0.0001
-                # end
             end
         end
         return nothing
@@ -535,19 +601,6 @@ module sampler
             end
             __sampler.exp_normalize!(ln_p)
             samp.a[i] = indmax( random.sampleMultiNomial(1, ln_p) )
-            # if abs( (now_lnP - new_lnP) - ( ln_p_temp[now_A] - ln_p_temp[new_A]) ) > 0.0001
-            #     print("(now_lnP - new_lnP): "); println((now_lnP - new_lnP))
-            #     print("(now_lnP): "); println(now_lnP)
-            #     print("(new_lnP): "); println(new_lnP)
-            #     print("(ln_p[now_A]) - ln_p[new_A]): "); println(ln_p_temp[now_A] - ln_p_temp[new_A])
-            #     print("(ln_p[now_A]): "); println(ln_p_temp[now_A])
-            #     print("(ln_p[new_A]): "); println(ln_p_temp[new_A])
-            #     print("(ln_p): "); println(ln_p_temp)
-            #     print("now_A"); println(now_A)
-            #     print("new_A"); println(new_A)
-            #
-            #     @assert abs( (now_lnP - new_lnP) - ( ln_p_temp[now_A] - ln_p_temp[new_A]) ) < 0.0001
-            # end
         end
         return nothing
     end
@@ -571,17 +624,6 @@ module sampler
                 end
             end
             samp.f[j] = random.sampleBeta(λ[1], λ[2])
-            # if abs( (now_lnP - new_lnP) - ( ln_p_now - ln_p_new) ) > 0.0001
-            #     print("(now_lnP - new_lnP): "); println((now_lnP - new_lnP))
-            #     print("(now_lnP): "); println(now_lnP)
-            #     print("(new_lnP): "); println(new_lnP)
-            #     print("(ln_p[now_F]) - ln_p[new_F]): "); println(ln_p_now - ln_p_new)
-            #     print("(ln_p[now_F]): "); println(ln_p_now)
-            #     print("(ln_p[new_F]): "); println(ln_p_new)
-            #     print("now_F"); println(now_F)
-            #     print("new_F"); println(new_F)
-            #     @assert abs( (now_lnP - new_lnP) - ( ln_p_now - ln_p_new) ) < 0.0001
-            # end
         end
         return nothing
     end
@@ -602,21 +644,9 @@ module sampler
                     )
                 end
             end
-            ln_p_temp::Array{R, 1} = deepcopy(ln_p)
+            # ln_p_temp::Array{R, 1} = deepcopy(ln_p)
             __sampler.exp_normalize!(ln_p)
             samp.g[j] = indmax( random.sampleMultiNomial(1, ln_p) )
-            # if abs( (now_lnP - new_lnP) - ( ln_p_temp[now_G] - ln_p_temp[new_G]) ) > 0.0001
-            #     println(samp.H[:,j])
-            #     print("(now_lnP - new_lnP): "); println((now_lnP - new_lnP))
-            #     print("(now_lnP): "); println(now_lnP)
-            #     print("(new_lnP): "); println(new_lnP)
-            #     print("(ln_p[now_G]) - ln_p[new_G]): "); println(ln_p_temp[now_G] - ln_p_temp[new_G])
-            #     print("(ln_p[now_G]): "); println(ln_p_temp[now_G])
-            #     print("(ln_p[new_G]): "); println(ln_p_temp[new_G])
-            #     print("now_G"); println(now_G)
-            #     print("new_G"); println(new_G)
-            #     @assert abs( (now_lnP - new_lnP) - ( ln_p_temp[now_G] - ln_p_temp[new_G]) ) < 0.0001
-            # end
         end
         return nothing
     end
@@ -646,25 +676,9 @@ module sampler
             end
             ln_p .+= ln_p_cons
 
-            ln_p_temp::Array{R, 1} = deepcopy(ln_p)
+            # ln_p_temp::Array{R, 1} = deepcopy(ln_p)
             __sampler.exp_normalize!(ln_p)
             samp.u[j] = indmax( random.sampleMultiNomial(1, ln_p) )
-            # if abs( (now_lnP - new_lnP) - ( ln_p_temp[now_U] - ln_p_temp[new_U]) ) > 0.0001
-            #     println(j)
-            #     println(samp.Z[:,j])
-            #     println(samp.B)
-            #     println(samp.usageS)
-            #     println(samp.usageV)
-            #     print("(now_lnP - new_lnP): "); println((now_lnP - new_lnP))
-            #     print("(now_lnP): "); println(now_lnP)
-            #     print("(new_lnP): "); println(new_lnP)
-            #     print("(ln_p[now_U]) - ln_p[new_U]): "); println(ln_p_temp[now_U] - ln_p_temp[new_U])
-            #     print("(ln_p[now_U]): "); println(ln_p_temp[now_U])
-            #     print("(ln_p[new_U]): "); println(ln_p_temp[new_U])
-            #     print("now_G"); println(now_U)
-            #     print("new_G"); println(new_U)
-            #     @assert abs( (now_lnP - new_lnP) - ( ln_p_temp[now_U] - ln_p_temp[new_U]) ) < 0.0001
-            # end
         end
         return nothing
     end
@@ -729,11 +743,6 @@ module sampler
         γ_e[1] += (R)(length(samp.erSet))
         γ_e[2] += (R)(length(samp.er) - length(samp.erSet))
         samp.p_err = random.sampleBeta(γ_e[1], γ_e[2])
-        # next_p_err::R = samp.p_err      # debug
-        # next_p_all::R = ln_P_all(samp)  # debug
-        # prev_p_beta::R = __sampler.ln_P_beta(prev_p_err, γ_e[1], γ_e[2]) # debug
-        # next_p_beta::R = __sampler.ln_P_beta(next_p_err, γ_e[1], γ_e[2]) # debug
-        # @assert abs( (next_p_all - prev_p_all) - (next_p_beta - prev_p_beta) ) < 0.0001 # debug
         return nothing
     end
 
@@ -800,28 +809,134 @@ module sampler
             buffPhyloMatrix.update!(samp.treeCache, samp.B, samp.usageS, samp.usageV)
         end
         return nothing
+    end
 
-        # if abs( (accNext - accPrev) - ( next_ln_p + next_to_prev_ln_g - prev_ln_p - prev_to_next_ln_g) ) > 0.0001
-        #     print("(accNext - accPrev) - ( next_ln_p + next_to_prev_ln_g - prev_ln_p - prev_to_next_ln_g): "); println((accNext - accPrev) - ( next_ln_p + next_to_prev_ln_g - prev_ln_p - prev_to_next_ln_g))
-        #
-        #     print("(accNext - accPrev): "); println((accNext - accPrev))
-        #     print("(accNext): "); println((accNext))
-        #     print("(accPrev): "); println((accPrev))
-        #
-        #     print("( next_ln_p + next_to_prev_ln_g - prev_ln_p - prev_to_next_ln_g): "); println(( next_ln_p + next_to_prev_ln_g - prev_ln_p - prev_to_next_ln_g))
-        #
-        #     print("( next_ln_p + next_to_prev_ln_g): "); println(( next_ln_p + next_to_prev_ln_g))
-        #     print("( next_ln_p ): "); println(( next_ln_p ))
-        #     print("( next_to_prev_ln_g): "); println(( next_to_prev_ln_g))
-        #
-        #     print(" prev_ln_p + prev_to_next_ln_g: "); println((prev_ln_p + prev_to_next_ln_g))
-        #     print(" prev_ln_p: "); println(prev_ln_p)
-        #     print(" prev_to_next_ln_g: "); println(prev_to_next_ln_g)
-        #
-        #     @assert abs( (accNext - accPrev) - ( next_ln_p + next_to_prev_ln_g - prev_ln_p - prev_to_next_ln_g) ) < 0.0001
-        # else
-        #     # print("passed: "); println(j)
-        # end
+    function ln_P_Y_marginal!(samp::Sampler{I, R}, c::I)::R where {I <: Integer, R <: Real}
+        ans::R = 0.0
+        ln_p::Array{R, 1} = [0.0, 0.0, 0.0]
+        for m in keys(samp.usageV)
+            ln_p .= 0.0
+            now_B::I = samp.B[c,m]
+            if now_B == 4
+                continue
+            end
+            for b in 1:3
+                ln_p[b] += log(e, samp.param.δ_s[b])
+                samp.B[c,m] = b
+                ln_p[b] += __sampler.ln_P_Y(samp.Z, samp.H, samp.S_s, samp.S_v, samp.B, samp.a, samp.f,
+                                            samp.g, samp.u, samp.er, samp.param,
+                                            rangeS = samp.usageS[c], rangeV = samp.usageV[m])
+            end
+            samp.B[c,m] = now_B
+            ans += __sampler.log_sum_exp(ln_p)
+        end
+        return ans
+    end
+
+    function ln_P_B_PartialPosterior!(samp::Sampler{I,R}, c::I, m::I)::R where {I <: Integer, R <: Real }
+        nowB::I = samp.B[c,m]
+        (nowB == 4) && (return 0.0)
+        ln_p::Array{R, 1} = convert.(R, [0.0, 0.0, 0.0])
+        for t in 1:3
+            samp.B[c, m] = t
+            ln_p[t] += log(e, samp.param.δ_s[t])
+            ln_p[t] += __sampler.ln_P_Y(samp.Z, samp.H, samp.S_s, samp.S_v, samp.B, samp.a, samp.f,
+                                        samp.g, samp.u, samp.er, samp.param,
+                                        rangeS = samp.usageS[c], rangeV = samp.usageV[m])
+        end
+        # ln_p_temp::Array{R, 1} = deepcopy(ln_p)
+        __sampler.exp_normalize!(ln_p)
+        samp.B[c, m] = nowB
+        return log(e, ln_p[nowB])
+    end
+
+    function sampleBPatiallyGibbs!(samp::Sampler{I,R}, c::I, m::I)::Void where {I <: Integer, R <: Real }
+        (samp.B[c, m] == 4) && (return nothing)
+        ln_p::Array{R, 1} = convert.(R, [0.0, 0.0, 0.0])
+        for t in 1:3
+            samp.B[c, m] = t
+            ln_p[t] += log(e, samp.param.δ_s[t])
+            ln_p[t] += __sampler.ln_P_Y(samp.Z, samp.H, samp.S_s, samp.S_v, samp.B, samp.a, samp.f,
+                                        samp.g, samp.u, samp.er, samp.param,
+                                        rangeS = samp.usageS[c], rangeV = samp.usageV[m])
+        end
+        # ln_p_temp::Array{R, 1} = deepcopy(ln_p)
+        __sampler.exp_normalize!(ln_p)
+        samp.B[c, m] = indmax( random.sampleMultiNomial(1, ln_p) )
+        buffPhyloMatrix.update!(samp.treeCache, samp.B, samp.usageS, samp.usageV)
+        return nothing
+    end
+
+    function sampleL!(samp::Sampler{I, R}, i::I, correct::Bool = true)::Void where {I <: Integer, R <: Real}
+        prev_to::I = tableGraph.getLink(samp.L, i)
+        next_to::I = __sampler.sampleLink(samp.L.W, i)
+        S_pp::Set{I} = Set{I}([])
+        S_pn::Set{I} = Set{I}([])
+        S_np::Set{I} = Set{I}([])
+        S_nn::Set{I} = Set{I}([])
+        tableGraph.diffGroup!(samp.L, S_pp, S_pn, S_np, S_nn, i, prev_to, next_to, both = true)
+
+        accPrevTrue::R = 0.0 # debug
+        accNextTrue::R = 0.0 # debug
+
+        prevUsageS::Dict{I, Array{I, 1}} = deepcopy(samp.usageS)
+        prevUnUsedS::Set{I}              = deepcopy(samp.unUsedS)
+        prevS_s::Array{I}                = deepcopy(samp.S_s)
+        prevBs::Dict{Tuple{I,I}, I}      = deepcopy(samp.B)
+        accPrev::R = 0.0
+        (
+            if correct;
+                accPrev += ln_P_Y_marginal!(samp, samp.S_s[prev_to]);
+                if samp.S_s[prev_to] != samp.S_s[next_to];
+                    accPrev += ln_P_Y_marginal!(samp, samp.S_s[next_to]);
+                end
+                accPrev += __sampler.ln_P_V(samp.Z, samp.usageS, samp.usageV, samp.B, samp.erSet,
+                                            samp.treeCache, samp.param.ln_p_v);
+            end;
+        )
+        accNext::R = 0.0
+        (# update to proposal state
+            tableGraph.rmEdge!(samp.L, i, prev_to);
+            tableGraph.addEdge!(samp.L, i, next_to);
+            (removed::Array{I, 1}, added::Array{I, 1}) = __sampler.updateSsByGroupDiff!(S_pp, S_pn, S_np, S_nn,
+                                                                                        samp.usageS, samp.unUsedS, samp.S_s);
+            errM::Set{I} = Set{I}([]);
+            for c in removed; for m in keys(samp.usageV);
+                (samp.B[c,m] == 4) && (push!(errM, m));
+                pop!(samp.B, (c,m));
+            end; end;
+            for c in added; for m in keys(samp.usageV);
+                samp.B[c,m] = 1;
+                (m ∈ errM) && (samp.B[c,m] = 4);
+            end; end;
+            for c in added; for m in keys(samp.usageV);
+                sampleBPatiallyGibbs!(samp, c, m);
+            end; end;
+            if correct;
+                accNext += ln_P_Y_marginal!(samp, samp.S_s[prev_to]);
+                if samp.S_s[prev_to] != samp.S_s[next_to];
+                    accNext += ln_P_Y_marginal!(samp, samp.S_s[next_to]);
+                end;
+                accNext += __sampler.ln_P_V(samp.Z, samp.usageS, samp.usageV, samp.B, samp.erSet,
+                                            samp.treeCache, samp.param.ln_p_v);
+            end;
+        )
+        # select prev/next
+        accRate::R = min(1.0, exp(accNext - accPrev))
+
+        if !correct
+            return nothing
+        elseif rand() > accRate # rejected
+            tableGraph.rmEdge!(samp.L, i, next_to)
+            tableGraph.addEdge!(samp.L, i, prev_to)
+            samp.usageS  = deepcopy(prevUsageS)
+            samp.unUsedS = deepcopy(prevUnUsedS)
+            samp.S_s     = deepcopy(prevS_s)
+            samp.B       = deepcopy(prevBs)
+        else
+            println("accepted");
+        end
+        return nothing
     end
 
     function sampleB!(samp::Sampler{I, R}, c::I, m::I) where {I <: Integer, R <: Real}
@@ -840,7 +955,7 @@ module sampler
             ln_p[t] += __sampler.ln_P_V(samp.Z, samp.usageS, samp.usageV, samp.B, samp.erSet,
                                         samp.treeCache, samp.param.ln_p_v)
         end
-        ln_p_temp::Array{R, 1} = deepcopy(ln_p)
+        # ln_p_temp::Array{R, 1} = deepcopy(ln_p)
         __sampler.exp_normalize!(ln_p)
         samp.B[c, m] = indmax( random.sampleMultiNomial(1, ln_p) )
         buffPhyloMatrix.update!(samp.treeCache, samp.B, samp.usageS, samp.usageV)
@@ -873,7 +988,7 @@ module sampler
             sampleH!(samp)
 
             for i in 1:S
-                sampleS_s!(samp, i)
+                sampleL!(samp, i, true)
             end
 
             sampleP_err!(samp)
@@ -925,7 +1040,7 @@ module sampler
             sampleH!(samp)
 
             for i in 1:S
-                sampleS_s!(samp, i)
+                sampleL!(samp, i)
             end
 
             for j in 1:M
@@ -1003,6 +1118,15 @@ module sampler
         Z::Array{INT, 2}   = convert.(INT, fill(1,S,M)) # init ℤ, Z[i,j] ∈ {1,2}, 1: error, 2: tumor
         H::Array{INT, 2}   = convert.(INT, fill(1,S,M)) # init H, H[i,j] ∈ {1,2}, 1: mat,   2: pat
 
+        D::Array{REAL, 2}  = distanceParser.parseBFHammingDistance(errScorePath, patScorePath, matScorePath, paramPath, "alpha_s")
+        decayFunc = distanceParser.parseDecayFunction(paramPath)
+        for (i,j) in Iterators.product(1:S,1:S)
+            (i != j) && ( D[i,j] = decayFunc(D[i,j]))
+        end
+        println("f(distance)")
+        println(D)
+        L::TableGraph{INT, REAL} = tableGraph.init(S, D)
+
         s_s::Array{INT, 1} = convert.(INT, collect(1:S)) # init sample wise cluster
         s_v::Array{INT, 1} = convert.(INT, collect(1:M)) # init mutation wise cluster
         usageS::Dict{INT,Array{INT,1}} = Dict{INT,Array{INT,1}}()
@@ -1023,7 +1147,7 @@ module sampler
 
         treeCache::BuffPhyloMatrix{INT} = buffPhyloMatrix.init(S, M, bufferSize = M)
 
-        samp::Sampler{INT, REAL} = Sampler{INT, REAL}(Z, H, s_s, s_v, usageS, usageV, Set{INT}(), Set{INT}(),
+        samp::Sampler{INT, REAL} = Sampler{INT, REAL}(Z, H, L, s_s, s_v, usageS, usageV, Set{INT}(), Set{INT}(),
                                                       a, f, g, u, p_err, er, Set{INT}(),  B, treeCache, lnP_D, param, anneal, 0.0)
         samp.lnProb = ln_P_all(samp)
         return samp
