@@ -933,8 +933,6 @@ module sampler
             samp.unUsedS = deepcopy(prevUnUsedS)
             samp.S_s     = deepcopy(prevS_s)
             samp.B       = deepcopy(prevBs)
-        else
-            println("accepted");
         end
         return nothing
     end
@@ -979,11 +977,17 @@ module sampler
                         burnin::I = 0,
                         progressCount::I = 100)::Tuple{Sampler{I, R}, Array{R, 1}} where {I <:Integer, R <: Real }
         srand(seed)
+        ln_p_v_true::Array{R, 1} = samp.param.ln_p_v
         mapState::Sampler{I,R} = deepcopy(samp)
         lnProbs::Array{R, 1} = []
         maxLn::R = -Inf
         for count in 1:(iter+burnin)
             S::I, M::I = size(samp.Z)
+            __sampler.updatePenalty!(count,
+                                    samp.param.ln_p_v,
+                                    samp.anneal.ln_p_generous,
+                                    samp.anneal.ln_p_rigorous, samp.anneal.period)
+
             sampleZ!(samp)
             sampleH!(samp)
 
@@ -1006,6 +1010,7 @@ module sampler
             end
 
             if count > burnin && count % thin == 0
+                samp.param.ln_p_v .= ln_p_v_true
                 samp.lnProb = ln_P_all(samp)
                 push!(lnProbs, samp.lnProb)
                 if maxLn < samp.lnProb
@@ -1032,7 +1037,7 @@ module sampler
         sampled::Array{ Tuple{Sampler{I,R}, I}, 1} = []
         for count in 1:(iter+burnin)
             S::I, M::I = size(samp.Z)
-            __sampler.updatePenalty(count,
+            __sampler.updatePenalty!(count,
                                     samp.param.ln_p_v,
                                     samp.anneal.ln_p_generous,
                                     samp.anneal.ln_p_rigorous, samp.anneal.period)

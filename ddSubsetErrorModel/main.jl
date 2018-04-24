@@ -1,9 +1,15 @@
 include("include.jl")
+Include("config64.jl")
 Include("buffPhyloMatrix.jl")
 Include("sampler.jl")
+Include("inputFileParser.jl")
 
 module __result
     using Plots
+    using config64
+    using sampler
+    using inputParser
+
     export sortBiClusteredMatrix
     export viewMatInHeatMap
     export viewFInHeatMap
@@ -12,6 +18,8 @@ module __result
     export viewBlockTypesInHeatMap
     export getMAPState
     export ACF
+    export evaluateFvalueRaw
+    export evaluateFvalueFromSampleAns
 
     function sortBiClusteredMatrix(matrix, usageR, usageC)
         sortR = []
@@ -170,12 +178,65 @@ module __result
         return ans
     end
 
+    function evaluateFvalueRaw(summaryPath::String, score::Array{REAL, 2}, thres::REAL = 0.0)::Tuple{REAL,REAL,REAL}
+        summaryTemp::Array{REAL, 2} = inputParser.parseInputSummary(summaryPath)
+        summary::Array{REAL, 2}     = zeros(size(score))
+        for (x,y) in Iterators.product(1:size(summaryTemp)[1],1:size(summaryTemp)[2])
+            summary[x,y] = summaryTemp[x,y]
+        end
+        TP::INT = sum( (score .>  thres) .* (summary .>  0.0) )
+        TN::INT = sum( (score .<= thres) .* (summary .<= 0.0) )
+        FP::INT = sum( (score .>  thres) .* (summary .<= 0.0) )
+        FN::INT = sum( (score .<= thres) .* (summary .>  0.0) )
+        precision::REAL = TP / (TP + FP)
+        recall::REAL = TP / (TP + FN)
+        print("Precision: "); println(precision);
+        print("Recall: ");    println(recall);
+        fvalue::REAL = 2.0 * precision * recall / (precision + recall)
+        print("Fvalue: ");    println(fvalue);
+        return (precision, recall, fvalue)
+    end
+
+    function evaluateFvalueFromSampleAns(summaryPath::String, sampled::Sampler{INT, REAL},
+                                         thres::REAL = 0.0,
+                                         rmError::Bool = true)::Tuple{REAL,REAL,REAL}
+        score::Array{REAL, 2}       = convert.(REAL, sampled.Z) .- 1.0
+        S::INT, M::INT = size(score)
+        if rmError
+            for (i,j) in Iterators.product(1:S, 1:M)
+                (sampled.er[j] == 2) && (score[i,j] = 0.0)
+            end
+        end
+        return evaluateFvalueRaw(summaryPath, score, thres)
+    end
+
 end
 
 module result
     using __result
     using Plots
     using sampler
+    using JLD
+    using config64
+    using inputParser
+
+    function writeToJLD(sMax, lnProbs, JLDFilePath)
+        jldopen(JLDFilePath, "w") do file
+            addrequire(file, sampler)
+            write(file, "sMax", sMax)
+            write(file, "lnProbs", lnProbs)
+        end
+    end
+
+    function readFromJLD(JLDFilePath)
+        sMax = jldopen(JLDFilePath, "r") do file
+            read(file, "sMax")
+        end
+        lnProbs = jldopen(JLDFilePath, "r") do file
+            read(file, "lnProbs")
+        end
+        return sMax, lnProbs
+    end
 
     function viewMAP(sMax, lnProbs, outputDir::String)
         pyplot()
@@ -247,6 +308,47 @@ module result
         viewAInHeatMap(sMax.a, sMax.usageS, rbreak, sortR, sMax.usageV, cbreak, sortC, "MAP.a", filePath = outputDir * "/MAP_a.png")
         viewBlockTypesInHeatMap(sMax.B, sMax.usageS, rbreak, sortR, sMax.usageV, cbreak, sortC, "MAP.B", filePath = outputDir * "/MAP_B.png")
     end
+
+    function evaluateFvalue(summaryPath::String, scorePath::String, thres::REAL = 0.0, rmError::Bool = true)::Tuple{REAL,REAL,REAL}
+        if endswith(scorePath, "jld")
+            sampled::Sampler{INT, REAL}, lnProbs::Array{REAL, 1} = readFromJLD(scorePath)
+            return evaluateFvalueFromSampleAns(summaryPath, sampled, thres, rmError)
+        else
+            score::Array{REAL, 2}       = inputParser.parseInputSummary(scorePath)
+            return evaluateFvalueRaw(summaryPath, score, thres)
+        end
+    end
+
+    function storeFvalue(outputPath::String, prescision::REAL, recall::REAL, fvalue::REAL, tag::String)
+        @assert endswith(outputPath, "jld")
+        if isfile(outputPath)
+            precisions::Dict{String, REAL} = jldopen(outputPath, "r") do file
+                read(file, "precisions")
+            end
+            recalls::Dict{String, REAL} = jldopen(outputPath, "r") do file
+                read(file, "recalls")
+            end
+            fvalues::Dict{String, REAL} = jldopen(outputPath, "r") do file
+                read(file, "fvalues")
+            end
+            precisions[tag] = prescision
+            recalls[tag] = recall
+            fvalues[tag] = fvalue
+        else
+            precisions = Dict{String,REAL}(tag=>prescision)
+            recalls = Dict{String,REAL}(tag=>recall)
+            fvalues = Dict{String,REAL}(tag=>fvalue)
+        end
+        println(precisions)
+        println(recalls)
+        println(fvalues)
+
+        jldopen(outputPath, "w") do file
+            write(file, "precisions", precisions)
+            write(file, "recalls", recalls)
+            write(file, "fvalues", fvalues)
+        end
+    end
 end
 
 using sampler
@@ -262,6 +364,7 @@ doc = """ddSubsetErrorModel
 
 Usage:
     main.jl MAP <errScore> <matScore> <patScore> <iniFile> [options]
+    main.jl EVAL <score> <answer> <result> [options]
 
 Options:
   -o <DIR> --outDir=<DIR>  Output directory. We use current working directory if unspecified. [default: $cwd]
@@ -269,12 +372,23 @@ Options:
   -n <NUM> --number=<NUM>  Number of iteration after burnin. [default: 1000]
   -b <BURNIN> --burnin=<BURNIN>  Number of iteration during burnin. [default: 0]
   -t <THIN> --thin=<THIN>  Duration between sampling. [default: 1]
+  -m <THRES> --threshold=<THRES>  Threshold value for call mutation from file. [default: 0.0]
+  --rmError  Remove error if sample answer is used.
+  --tag=<TAG>  Tag information for storing Fvalues. [default: ]
   -h --help  Show this screen.
 
 """
 # println(doc)
 args = docopt(doc)
 println(args)
-@time sMax, lnProbs  = sampler.execMAP(args["<errScore>"], args["<matScore>"], args["<patScore>"], args["<iniFile>"],
-                                       seed = parse(args["--seed"]), iter = parse(args["--number"]), thin = parse(args["--thin"]), burnin = parse(args["--burnin"]))
-result.viewMAP(sMax, lnProbs, args["--outDir"])
+
+if args["MAP"] == "MAP"
+    @time sMax, lnProbs  = sampler.execMAP(args["<errScore>"], args["<matScore>"], args["<patScore>"], args["<iniFile>"],
+                                           seed = parse(args["--seed"]), iter = parse(args["--number"]), thin = parse(args["--thin"]), burnin = parse(args["--burnin"]))
+    result.writeToJLD(sMax, lnProbs, args["--outDir"] * "/sampleAns.jld")
+    result.viewMAP(sMax, lnProbs, args["--outDir"])
+elseif args["EVAL"] == "EVAL"
+    precision, recall, fvalue = result.evaluateFvalue(args["<answer>"], args["<score>"], parse(args["--threshold"]), args["--rmError"])
+    println((precision, recall, fvalue))
+    result.storeFvalue(args["<result>"], precision, recall, fvalue, String(args["--tag"]))
+end
