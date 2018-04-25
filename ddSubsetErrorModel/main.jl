@@ -41,7 +41,7 @@ if args["MAP"] == "MAP"
     result.writeToJLD(sMax, lnProbs, args["--outDir"] * "/sampleAns.jld")
     result.viewMAP(sMax, lnProbs, args["--outDir"])
 elseif args["EVAL"] == "EVAL"
-    precision, recall, fvalue = result.evaluateFvalue(args["<answer>"], args["<score>"], parse(args["--threshold"]), args["--rmError"])
+    precision, recall, fvalue = result.evaluateFvalue(args["<answer>"], args["<score>"], parse(REAL, args["--threshold"]), args["--rmError"])
     println((precision, recall, fvalue))
     result.storeFvalue(args["<result>"], precision, recall, fvalue, String(args["--tag"]))
 end
