@@ -1,5 +1,5 @@
 module config64
     export REAL, INT
-    const REAL = Float64
-    const INT  = Int64
+    const REAL = Float32
+    const INT  = Int32
 end

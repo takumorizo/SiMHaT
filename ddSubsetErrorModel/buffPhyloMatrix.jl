@@ -21,7 +21,7 @@ module __buffPhyloMatrix
     function summaryBits(B::Dict{Tuple{I,I}, I}, usageS::Dict{I,Array{I,1}},
                          usageV::Dict{I,Array{I,1}},
                          vectorSize::I;
-                         blockType::I = 1)::Set{I} where {I <: Integer}
+                         blockType::I = (I)(1))::Set{I} where {I <: Integer}
         ans::Set{I} = Set{I}()
         for m in keys(usageV)
             v::Array{I,1} = zeros(I, vectorSize)
@@ -51,10 +51,10 @@ module buffPhyloMatrix
     export BuffPhyloMatrix
 
     function init(R::I, C::I;
-                  descend::Bool = true, linkedValue::I = 1,
-                  bufferSize::I = 10) where {I <: Integer}
+                  descend::Bool = true, linkedValue::I = (I)(1),
+                  bufferSize::I = (I)(10)) where {I <: Integer}
         phylo::PhyloMatrix{I} = phyloMatrix.init(R, C+bufferSize, descend = descend, linkedValue = linkedValue)
-        return BuffPhyloMatrix(phylo, C, bufferSize, 0, Set{I}())
+        return BuffPhyloMatrix(phylo, C, bufferSize, (I)(0), Set{I}())
     end
 
     function novelIndex(buffPhylo::BuffPhyloMatrix{I})::I where {I <: Integer}
@@ -87,16 +87,16 @@ module buffPhyloMatrix
         @assert buffPhylo.bufferUsed < buffPhylo.bufferSize
         nextIndex::I = novelIndex(buffPhylo)
         Base.push!(buffPhylo.addedSetInBuffer, __buffPhyloMatrix.binaryArrayToInt(v))
-        buffPhylo.bufferUsed += 1
+        buffPhylo.bufferUsed += (I)(1)
         phyloMatrix.add!(buffPhylo.phylo, nextIndex, v)
         return nothing
     end
 
     function pop!(buffPhylo::BuffPhyloMatrix{I})::Void where {I <: Integer}
         if buffPhylo.bufferUsed > 0
-            rmIndex::I = novelIndex(buffPhylo) - 1
+            rmIndex::I = novelIndex(buffPhylo) - (I)(1)
             Base.pop!(buffPhylo.addedSetInBuffer, __buffPhyloMatrix.binaryArrayToInt(view(buffPhylo.phylo.cache.matrix, : , rmIndex + 1 )))
-            buffPhylo.bufferUsed -= 1
+            buffPhylo.bufferUsed -= (I)(1)
             phyloMatrix.rm!(buffPhylo.phylo, rmIndex)
         end
         return nothing
@@ -113,7 +113,7 @@ module buffPhyloMatrix
                      B::Dict{Tuple{I,I}, I},
                      usageS::Dict{I,Array{I,1}},
                      usageV::Dict{I,Array{I,1}};
-                     blockType::I = 1)::Void where {I <: Integer}
+                     blockType::I = (I)(1))::Void where {I <: Integer}
         R::I = buffPhylo.phylo.cache.R
         setNext::Set{I} = __buffPhyloMatrix.summaryBits(B, usageS, usageV, R,
                                                         blockType = blockType)

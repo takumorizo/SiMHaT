@@ -24,7 +24,7 @@ module __sampler
         matScore::Array{REAL, 2} = inputParser.parseInputSummary(matScorePath)
         patScore::Array{REAL, 2} = inputParser.parseInputSummary(patScorePath)
         # param::Parameters{REAL}  = inputParser.parseConfigFile(paramPath)
-        S, M = size(errScore)
+        S::INT, M::INT = size(errScore)
         lnP::Array{REAL, 3} = convert.(REAL, zeros(S,M,3))
         for (s,m) in Iterators.product(1:S,1:M)
             lnP[s,m,1] = errScore[s,m]
@@ -149,8 +149,8 @@ module __sampler
                           usageV::Dict{I, Array{I,1}},
                           erSet::Set{I},
                           treeCache::BuffPhyloMatrix{I};
-                          blockType::I = 1, debug = false)::Bool where {I <: Integer}
-        buffPhyloMatrix.update!(treeCache, B, usageS, usageV, blockType = 1)
+                          blockType::I = (I)(1), debug = false)::Bool where {I <: Integer}
+        buffPhyloMatrix.update!(treeCache, B, usageS, usageV, blockType = (I)(1))
         # (debug) && (print("erSet: "); println(erSet))
         # (debug) && (print("isTree: "); println(buffPhyloMatrix.isTree(treeCache)))
         return (length(erSet) == 0) || (!buffPhyloMatrix.isTree(treeCache))
@@ -189,7 +189,7 @@ module __sampler
                     erSet::Set{I},
                     treeCache::BuffPhyloMatrix{I},
                     ln_p_penalties::Array{R, 1})::R where {I <: Integer, R <: Real}
-        isValid::Bool = isMainValid(usageS, usageV, B) && isErrorValid(B, usageS, usageV, erSet, treeCache, blockType = 1)
+        isValid::Bool = isMainValid(usageS, usageV, B) && isErrorValid(B, usageS, usageV, erSet, treeCache, blockType = (I)(1))
         return (R)(isValid) * ln_p_penalties[1] + (R)(!isValid) * ln_p_penalties[2]
     end
 
@@ -230,8 +230,8 @@ module __sampler
                     u::Array{I, 1},
                     er::Array{I, 1},
                     param::Parameters{I, R};
-                    rangeS::AbstractArray{I, 1} = 1:0,
-                    rangeV::AbstractArray{I, 1} = 1:0)::R where {I <: Integer, R <: Real}
+                    rangeS::AbstractArray{I, 1} = (I)(1):(I)(0),
+                    rangeV::AbstractArray{I, 1} = (I)(1):(I)(0))::R where {I <: Integer, R <: Real}
         ans::R = 0.0
         S::I, M::I = size(Z)
         if length(rangeS) == 0
@@ -316,7 +316,7 @@ module __sampler
         ln_p::Array{R, 1} = convert.(R, log.(e, nums))
         exp_normalize!(ln_p)
 
-        sampledCluster::I = candidates[ indmax(random.sampleMultiNomial(1, ln_p)) ]
+        sampledCluster::I = candidates[ indmax(random.sampleMultiNomial((I)(1), ln_p)) ]
         return sampledCluster
     end
 
@@ -342,7 +342,7 @@ module __sampler
     end
 
     function updateSubset!(element::I, prevState::I, nextState::I, set::Set{I}, array::Array{I, 1};
-                           positive::I = 2, negative::I = 1)::Void where {I <: Integer}
+                           positive::I = (I)(2), negative::I = (I)(1))::Void where {I <: Integer}
         (prevState == nextState) && (return nothing)
 
         if nextState == positive
@@ -358,7 +358,7 @@ module __sampler
     function updateCacheInError!(element::I, prevState::I, nextState::I,
                                  v::AbstractArray{I, 1},
                                  treeCache::BuffPhyloMatrix{I};
-                                 positive::I = 2, negative::I = 1)::Void where {I <: Integer}
+                                 positive::I = (I)(2), negative::I = (I)(1))::Void where {I <: Integer}
         (prevState == nextState) && (return nothing)
 
         if nextState == positive
@@ -383,7 +383,7 @@ module __sampler
         @assert size(D)[1] == size(D)[2]
         ln_p::Array{R, 1} = log.(e, D[:, i])
         __sampler.exp_normalize!(ln_p)
-        return indmax( random.sampleMultiNomial(1, ln_p) )
+        return indmax( random.sampleMultiNomial((I)(1), ln_p) )
     end
 
     function rmCluster!(S::Set{I}, usage::Dict{I, Array{I, 1}}, unused::Set{I}, S_s::Array{I, 1})::I where {I <: Integer}
@@ -523,8 +523,8 @@ module sampler
         ln_p::Array{R,1} = [0.0, 0.0]
         ln_f::Array{R,1} = [0.0, 0.0]
         now_Z::I = 0
-        for j in 1:M
-            for i in 1:S
+        for j in (I)(1):M
+            for i in (I)(1):S
                 now_Z = samp.Z[i,j]
                 t = 1 + samp.H[i,j]
                 ln_p[1] = samp.lnPData[i,j,1]; ln_p[2] = samp.lnPData[i,j,t];
@@ -543,14 +543,14 @@ module sampler
                     ln_p[2] += ln_f[2]
                     isV::Bool        = isValid(samp)
                     ln_p[now_Z]     += (R)(isV) * samp.param.ln_p_v[1] + (R)(!isV) * samp.param.ln_p_v[2]
-                    buffPhyloMatrix.edit!(samp.treeCache, i, j, (3 - now_Z) - 1)
+                    buffPhyloMatrix.edit!(samp.treeCache, i, j, (I)((3 - now_Z) - 1))
                     isV              = isValid(samp)
                     ln_p[3 - now_Z] += (R)(isV) * samp.param.ln_p_v[1] + (R)(!isV) * samp.param.ln_p_v[2]
                 end
                 __sampler.exp_normalize!(ln_p)
-                samp.Z[i,j] = indmax( random.sampleMultiNomial(1, ln_p) )
+                samp.Z[i,j] = (I)(indmax( random.sampleMultiNomial((I)(1), ln_p) ))
                 if samp.er[j] == 2
-                    buffPhyloMatrix.edit!(samp.treeCache, i, j, samp.Z[i,j]-1)
+                    buffPhyloMatrix.edit!(samp.treeCache, i, j, samp.Z[i,j]-(I)(1))
                 end
             end
         end
@@ -574,7 +574,7 @@ module sampler
                     ln_p[2] += (samp.g[j] == 2) * ln_P_rn[2] + (samp.g[j] == 1) * ln_P_rn[1]
                 end
                 __sampler.exp_normalize!(ln_p)
-                samp.H[i,j] = indmax( random.sampleMultiNomial(1, ln_p) )
+                samp.H[i,j] = indmax( random.sampleMultiNomial((I)(1), ln_p) )
             end
         end
         return nothing
@@ -600,7 +600,7 @@ module sampler
                 end
             end
             __sampler.exp_normalize!(ln_p)
-            samp.a[i] = indmax( random.sampleMultiNomial(1, ln_p) )
+            samp.a[i] = indmax( random.sampleMultiNomial((I)(1), ln_p) )
         end
         return nothing
     end
@@ -646,7 +646,7 @@ module sampler
             end
             # ln_p_temp::Array{R, 1} = deepcopy(ln_p)
             __sampler.exp_normalize!(ln_p)
-            samp.g[j] = indmax( random.sampleMultiNomial(1, ln_p) )
+            samp.g[j] = indmax( random.sampleMultiNomial((I)(1), ln_p) )
         end
         return nothing
     end
@@ -678,7 +678,7 @@ module sampler
 
             # ln_p_temp::Array{R, 1} = deepcopy(ln_p)
             __sampler.exp_normalize!(ln_p)
-            samp.u[j] = indmax( random.sampleMultiNomial(1, ln_p) )
+            samp.u[j] = indmax( random.sampleMultiNomial((I)(1), ln_p) )
         end
         return nothing
     end
@@ -700,7 +700,7 @@ module sampler
             if ( nextCluster ∈ samp.unUsedS ) ||
                ( length(samp.unUsedS) == 0  && nextCluster == prevCluster);
                 for m in keys(samp.usageV);
-                    (m != 0) && (nextBs[nextCluster, m] = indmax( random.sampleMultiNomial(1, samp.param.δ_s) ));
+                    (m != 0) && (nextBs[nextCluster, m] = indmax( random.sampleMultiNomial((I)(1), samp.param.δ_s) ));
                     (m == 0) && (nextBs[nextCluster, m] = 4);
                 end;
             end;
@@ -752,7 +752,7 @@ module sampler
         prevF::R  = samp.f[j]
         prevBs::Dict{Tuple{I,I}, I} = deepcopy(samp.B)
 
-        nextEr::I = indmax( random.sampleMultiNomial(1, [1.0 - samp.p_err, samp.p_err]) )
+        nextEr::I = indmax( random.sampleMultiNomial((I)(1), [1.0 - samp.p_err, samp.p_err]) )
         nextCluster::I = 0
         (nextEr==1) && (nextCluster = __sampler.sampleCRP(samp.S_v[j], samp.usageV, samp.unUsedV, samp.param.α_v) )
         (nextEr==2) && (nextCluster = 0)
@@ -773,7 +773,7 @@ module sampler
                 if ( nextCluster ∈ samp.unUsedV ) ||
                    ( length(samp.unUsedV) == 0  && nextCluster == prevCluster);
                     for c in keys(samp.usageS);
-                        nextBs[c, nextCluster] = indmax( random.sampleMultiNomial(1, samp.param.δ_s) );
+                        nextBs[c, nextCluster] = indmax( random.sampleMultiNomial((I)(1), samp.param.δ_s) );
                     end;
                 end;
             end;
@@ -788,7 +788,7 @@ module sampler
         accNext::R = 0.0 # update prev to next state
         (
             __sampler.updateSubset!(j, prevEr, nextEr, samp.erSet, samp.er);
-            __sampler.updateCacheInError!(j, prevEr, nextEr, view(samp.Z, :, j).-1, samp.treeCache);
+            __sampler.updateCacheInError!(j, prevEr, nextEr, view(samp.Z, :, j).-(I)(1), samp.treeCache);
             __sampler.updateCluster!(prevCluster, nextCluster, samp.S_v, samp.usageV, samp.unUsedV, j);
             samp.B = deepcopy(nextBs);
             samp.f[j] = nextF;
@@ -802,7 +802,7 @@ module sampler
         accRate::R = min(1.0, exp(accNext - accPrev))
         if rand() > accRate # rejected and revert to a previous state
             __sampler.updateSubset!(j, nextEr, prevEr, samp.erSet, samp.er)
-            __sampler.updateCacheInError!(j, nextEr, prevEr, view(samp.Z, :, j).-1, samp.treeCache)
+            __sampler.updateCacheInError!(j, nextEr, prevEr, view(samp.Z, :, j).-(I)(1), samp.treeCache)
             __sampler.updateCluster!(nextCluster, prevCluster, samp.S_v, samp.usageV, samp.unUsedV, j)
             samp.B = deepcopy(prevBs);
             samp.f[j]  = prevF
@@ -862,7 +862,7 @@ module sampler
         end
         # ln_p_temp::Array{R, 1} = deepcopy(ln_p)
         __sampler.exp_normalize!(ln_p)
-        samp.B[c, m] = indmax( random.sampleMultiNomial(1, ln_p) )
+        samp.B[c, m] = indmax( random.sampleMultiNomial((I)(1), ln_p) )
         buffPhyloMatrix.update!(samp.treeCache, samp.B, samp.usageS, samp.usageV)
         return nothing
     end
@@ -941,9 +941,9 @@ module sampler
         (samp.B[c, m] == 4) && (return nothing)
         # ln_p_correct::Array{R, 1} = [0.0, 0.0, 0.0]
         ln_p::Array{R, 1} = convert.(R, [0.0, 0.0, 0.0])
-        rangeB::Range{I} = 1:3
-        (samp.B[c,m] != 1) && (rangeB = 3:-1:1)
-        for t in 1:3
+        rangeB::Range{I} = (I)(1):(I)(3)
+        (samp.B[c,m] != 1) && (rangeB = (I)(3):(I)(-1):(I)(1))
+        for t in (I)(1):(I)(3)
             samp.B[c, m] = t
             buffPhyloMatrix.update!(samp.treeCache, samp.B, samp.usageS, samp.usageV)
             ln_p[t] += log(e, samp.param.δ_s[t])
@@ -955,7 +955,7 @@ module sampler
         end
         # ln_p_temp::Array{R, 1} = deepcopy(ln_p)
         __sampler.exp_normalize!(ln_p)
-        samp.B[c, m] = indmax( random.sampleMultiNomial(1, ln_p) )
+        samp.B[c, m] = indmax( random.sampleMultiNomial((I)(1), ln_p) )
         buffPhyloMatrix.update!(samp.treeCache, samp.B, samp.usageS, samp.usageV)
         # if abs( (ln_p_temp[now_B] - ln_p_temp[new_B]) - (ln_p_correct[now_B] - ln_p_correct[new_B]) ) > 0.001
         #     print("(ln_p_temp[now_B] - ln_p_temp[new_B])"); println((ln_p_temp[now_B] - ln_p_temp[new_B]))
@@ -971,11 +971,11 @@ module sampler
 
 
     function sampleMAP!(samp::Sampler{I, R};
-                        seed::I = 0,
-                        iter::I = 100000,
-                        thin::I = 1,
-                        burnin::I = 0,
-                        progressCount::I = 100)::Tuple{Sampler{I, R}, Array{R, 1}} where {I <:Integer, R <: Real }
+                        seed::I = (I)(0),
+                        iter::I = (I)(100000),
+                        thin::I = (I)(1),
+                        burnin::I = (I)(0),
+                        progressCount::I = (I)(100))::Tuple{Sampler{I, R}, Array{R, 1}} where {I <:Integer, R <: Real}
         srand(seed)
         ln_p_v_true::Array{R, 1} = samp.param.ln_p_v
         mapState::Sampler{I,R} = deepcopy(samp)
@@ -983,7 +983,7 @@ module sampler
         maxLn::R = -Inf
         for count in 1:(iter+burnin)
             S::I, M::I = size(samp.Z)
-            __sampler.updatePenalty!(count,
+            __sampler.updatePenalty!((I)(count),
                                     samp.param.ln_p_v,
                                     samp.anneal.ln_p_generous,
                                     samp.anneal.ln_p_rigorous, samp.anneal.period)
@@ -992,12 +992,12 @@ module sampler
             sampleH!(samp)
 
             for i in 1:S
-                sampleL!(samp, i, true)
+                sampleL!(samp, (I)(i), true)
             end
 
             sampleP_err!(samp)
             for j in 1:M
-                sampleS_v!(samp, j)
+                sampleS_v!(samp,  (I)(j))
             end
 
             sampleA!(samp)
@@ -1006,7 +1006,7 @@ module sampler
             sampleU!(samp)
 
             for (c,m) in Iterators.product(keys(samp.usageS), keys(samp.usageV))
-                sampleB!(samp, c, m)
+                sampleB!(samp,  (I)(c), (I)(m))
             end
 
             if count > burnin && count % thin == 0
@@ -1027,10 +1027,10 @@ module sampler
 
     # return the (state of MAP, iterCount, lnProb) with in this iterations
     function sampleAll!(samp::Sampler{I, R};
-                        seed::I = 0,
-                        iter::I = 100000,
-                        thin::I = 10,
-                        burnin::I = 10)::Array{Tuple{Sampler{I, R}, I}, 1} where {I <:Integer, R <: Real }
+                        seed::I = (I)(0),
+                        iter::I = (I)(100000),
+                        thin::I = (I)(10),
+                        burnin::I = (I)(10))::Array{Tuple{Sampler{I, R}, I}, 1} where {I <:Integer, R <: Real }
         # setting the given random seed
         srand(seed)
         ln_p_v_true::Array{R, 1} = samp.param.ln_p_v
@@ -1117,8 +1117,8 @@ module sampler
         println(lnP_D)
         println("==================================")
 
-        S = size(lnP_D, 1)
-        M = size(lnP_D, 2)
+        S::INT = size(lnP_D, 1)
+        M::INT = size(lnP_D, 2)
 
         Z::Array{INT, 2}   = convert.(INT, fill(1,S,M)) # init ℤ, Z[i,j] ∈ {1,2}, 1: error, 2: tumor
         H::Array{INT, 2}   = convert.(INT, fill(1,S,M)) # init H, H[i,j] ∈ {1,2}, 1: mat,   2: pat
@@ -1143,7 +1143,7 @@ module sampler
         f::Array{REAL,1} = convert.(REAL,fill(0.90, M)) # init mutation freq for each mutation
         g::Array{INT, 1} = convert.(INT, fill(1, M))    # init haplotype for each mutation
         u::Array{INT, 1} = convert.(INT, fill(1, M))    # init mutation to unique sample indicator
-        p_err::REAL      = 0.05                         # init false positive mutation rate
+        p_err::REAL      = (REAL)(0.05)                      # init false positive mutation rate
         er::Array{INT,1} = convert.(INT, fill(1, M))    # init error indicator for each mutation
 
         # init block cluster ∈ {1,2,3,4}, 1:shared, 2:meged, 3:unique, 4:error
@@ -1153,13 +1153,13 @@ module sampler
         treeCache::BuffPhyloMatrix{INT} = buffPhyloMatrix.init(S, M, bufferSize = M)
 
         samp::Sampler{INT, REAL} = Sampler{INT, REAL}(Z, H, L, s_s, s_v, usageS, usageV, Set{INT}(), Set{INT}(),
-                                                      a, f, g, u, p_err, er, Set{INT}(),  B, treeCache, lnP_D, param, anneal, 0.0)
+                                                      a, f, g, u, p_err, er, Set{INT}(),  B, treeCache, lnP_D, param, anneal, (REAL)(0.0))
         samp.lnProb = ln_P_all(samp)
         return samp
     end
 
     function execMAP(errScores::String, matScores::String, patScores::String, iniFile::String;
-                     seed::I = 0, iter::I = 100000, thin::I = 10, burnin::I = 10) where {I <: Integer}
+                     seed::I = (I)(0), iter::I = (I)(100000), thin::I = (I)(10), burnin::I = (I)(10)) where {I <: Integer}
         samp = sampler.init(errScores, matScores, patScores, iniFile)
         map, lnProbs = sampler.sampleMAP!(samp, seed = seed, iter = iter, thin = thin, burnin = burnin)
         return (map, lnProbs)

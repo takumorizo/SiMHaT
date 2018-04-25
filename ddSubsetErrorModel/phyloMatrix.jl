@@ -4,7 +4,7 @@ module __phyloMatrix
     using sortingCache2D
     using __sortingCache2D
     function updateL!(cache::SortingCache2D{I}, Ly::Array{Bool,1}, Lmin::Array{I,1}, LyUpdates::Array{I,1};
-                     linkedValue::I = 1)::Void where {I <: Integer}
+                     linkedValue::I = (I)(1))::Void where {I <: Integer}
         for c in LyUpdates
             Lmin[c] = cache.C + 2
             Ly[c] = true
@@ -32,12 +32,12 @@ module phyloMatrix
     type PhyloMatrix{I}
         cache::SortingCache2D{I}
         Ly::Array{Bool, 1}  # left most min 1 consistent hold true or not.
-        Lmin::Array{Int, 1} # left most min 1, index is a private version
+        Lmin::Array{I, 1} # left most min 1, index is a private version
     end
     export PhyloMatrix
 
     function init(R::I, C::I;
-                  descend::Bool = true, linkedValue::I = 1) where {I <: Integer}
+                  descend::Bool = true, linkedValue::I = (I)(1)) where {I <: Integer}
         cache::SortingCache2D{I} = sortingCache2D.init(R, C,
                                                        descend = descend, linkedValue = linkedValue)
         Ly::Array{Bool, 1}  = ones(Bool, C+2)

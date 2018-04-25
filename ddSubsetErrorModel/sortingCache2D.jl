@@ -149,8 +149,8 @@ module __sortingCache2D
                           LLRight::AbstractArray{I, 2},
                           sortedCols::AbstractArray{I, 1},
                           colOrder::I;
-                          linkVal::I = 1,
-                          interval::I = 5)::Array{I,1} where {I <: Integer}
+                          linkVal::I = (I)(1),
+                          interval::I = (I)(5))::Array{I,1} where {I <: Integer}
         @assert size(matrix) == size(LLLeft) == size(LLRight)
         R::I, C::I = size(matrix)
         col::I = sortedCols[colOrder]
@@ -180,8 +180,8 @@ module __sortingCache2D
                             LLRight::AbstractArray{I, 2},
                             sortedCols::AbstractArray{I, 1},
                             colOrder::I;
-                            linkVal::I = 1,
-                            interval::I = 5)::Array{I,1} where {I <: Integer}
+                            linkVal::I = (I)(1),
+                            interval::I = (I)(5))::Array{I,1} where {I <: Integer}
         @assert size(matrix) == size(LLLeft) == size(LLRight)
         R::I, C::I  = size(matrix)
         listSize::I = length(sortedCols)
@@ -261,7 +261,7 @@ module sortingCache2D
     end
 
     function init(R::I, C::I;
-                  descend::Bool = true, linkedValue::I = 1) where {I <: Integer}
+                  descend::Bool = true, linkedValue::I = (I)(1)) where {I <: Integer}
         matrix::Array{I,2}  = zeros(R, C + 2)
         LLLeft::Array{I,2}  = zeros(R, C + 2)
         LLRight::Array{I,2} = zeros(R, C + 2)

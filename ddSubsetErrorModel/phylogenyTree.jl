@@ -2,7 +2,7 @@ module __phylogenyTree
     # assume that sorted Mat is coloum-wise-sorted in an descending order.
     function isPhylogenic(sortedMat::AbstractArray{I, 2},
                           buffer2D::AbstractArray{I, 2};
-                          offset::I = 0, checkDriver::Bool = false)::Bool where {I <: Integer}
+                          offset::I = (I)(0), checkDriver::Bool = false)::Bool where {I <: Integer}
         X, Y = size(sortedMat)
         if (X,Y) != size(buffer2D)
             error("inconstent buffer2D size @__phylogenyTree.isPhylogenic")
@@ -34,9 +34,9 @@ module __phylogenyTree
 
     function radixSort(matrix::AbstractArray{I, 2};
                        ascendDigit::Bool = true,
-                       base::I = 2,
+                       base::I = (I)(2),
                        descend::Bool = false,
-                       offset::I = 0)::Array{I,1} where {I <: Integer}
+                       offset::I = (I)(0))::Array{I,1} where {I <: Integer}
         X,Y = size(matrix)
         bucket::Array{I, 2}     = zeros(base, Y)
         bucketSize::Array{I, 1} = zeros(base)
@@ -76,9 +76,9 @@ end
 module phylogenyTree
     using __phylogenyTree
     function isPhylogenic(binMat::AbstractArray{I, 2};
-                          offset::I = 0,
+                          offset::I = (I)(0),
                           checkDriver::Bool = false,
-                          minX::I = 1, minY::I = 1)::Bool where {I <: Integer}
+                          minX::I = (I)(1), minY::I = (I)(1))::Bool where {I <: Integer}
             # if minX == 1 || minY == 1
                 # error("refactoring not done")
             # end

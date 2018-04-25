@@ -178,7 +178,7 @@ module __result
         return ans
     end
 
-    function evaluateFvalueRaw(summaryPath::String, score::Array{REAL, 2}, thres::REAL = 0.0)::Tuple{REAL,REAL,REAL}
+    function evaluateFvalueRaw(summaryPath::String, score::Array{REAL, 2}, thres::REAL = (REAL)(0.0))::Tuple{REAL,REAL,REAL}
         summaryTemp::Array{REAL, 2} = inputParser.parseInputSummary(summaryPath)
         summary::Array{REAL, 2}     = zeros(size(score))
         for (x,y) in Iterators.product(1:size(summaryTemp)[1],1:size(summaryTemp)[2])
@@ -198,7 +198,7 @@ module __result
     end
 
     function evaluateFvalueFromSampleAns(summaryPath::String, sampled::Sampler{INT, REAL},
-                                         thres::REAL = 0.0,
+                                         thres::REAL = (REAL)(0.0),
                                          rmError::Bool = true)::Tuple{REAL,REAL,REAL}
         score::Array{REAL, 2}       = convert.(REAL, sampled.Z) .- 1.0
         S::INT, M::INT = size(score)
@@ -309,7 +309,7 @@ module result
         viewBlockTypesInHeatMap(sMax.B, sMax.usageS, rbreak, sortR, sMax.usageV, cbreak, sortC, "MAP.B", filePath = outputDir * "/MAP_B.png")
     end
 
-    function evaluateFvalue(summaryPath::String, scorePath::String, thres::REAL = 0.0, rmError::Bool = true)::Tuple{REAL,REAL,REAL}
+    function evaluateFvalue(summaryPath::String, scorePath::String, thres::REAL = (REAL)(0.0), rmError::Bool = true)::Tuple{REAL,REAL,REAL}
         if endswith(scorePath, "jld")
             sampled::Sampler{INT, REAL}, lnProbs::Array{REAL, 1} = readFromJLD(scorePath)
             return evaluateFvalueFromSampleAns(summaryPath, sampled, thres, rmError)
@@ -355,6 +355,7 @@ using sampler
 using result
 using DocOpt
 using Plots
+using config64
 pyplot()
 
 
@@ -384,7 +385,7 @@ println(args)
 
 if args["MAP"] == "MAP"
     @time sMax, lnProbs  = sampler.execMAP(args["<errScore>"], args["<matScore>"], args["<patScore>"], args["<iniFile>"],
-                                           seed = parse(args["--seed"]), iter = parse(args["--number"]), thin = parse(args["--thin"]), burnin = parse(args["--burnin"]))
+                                           seed = parse(INT, args["--seed"]), iter = parse(INT, args["--number"]), thin = parse(INT, args["--thin"]), burnin = parse(INT, args["--burnin"]))
     result.writeToJLD(sMax, lnProbs, args["--outDir"] * "/sampleAns.jld")
     result.viewMAP(sMax, lnProbs, args["--outDir"])
 elseif args["EVAL"] == "EVAL"
