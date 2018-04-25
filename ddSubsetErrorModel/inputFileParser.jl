@@ -1,8 +1,8 @@
-Include("config64.jl")
+Include("config.jl")
 
 module inputParser
     using ConfParser
-    using config64
+    using config
 
     export Parameters
     export Annealer

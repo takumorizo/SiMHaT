@@ -1,7 +1,7 @@
-Include("config64.jl")
+Include("config.jl")
 
 module random
-    using config64
+    using config
     using Distributions
 
     export sampleMultiNomial, sampleBeta

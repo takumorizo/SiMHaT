@@ -1,4 +1,4 @@
-Include("config64.jl")
+Include("config.jl")
 Include("inputFileParser.jl")
 Include("random.jl")
 Include("buffPhyloMatrix.jl")
@@ -10,7 +10,7 @@ ddSubsetErrorModel sampling script
 """
 
 module __sampler
-    using config64
+    using config
     using inputParser
     using Distributions
     using buffPhyloMatrix
@@ -433,7 +433,7 @@ module __sampler
 end
 
 module sampler
-    using config64
+    using config
     using inputParser
     using __sampler
     using random

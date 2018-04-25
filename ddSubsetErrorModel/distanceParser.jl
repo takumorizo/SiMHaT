@@ -1,8 +1,8 @@
-Include("config64.jl")
+Include("config.jl")
 Include("inputFileParser.jl")
 
 module distanceParser
-    using config64
+    using config
     using inputParser
     using ConfParser
     function parseBFHammingDistance(errScorePath::String,

@@ -1,7 +1,7 @@
-Include("config64.jl")
+Include("config.jl")
 
 module lnProbs
-    using config64
+    using config
     using Distributions
     # x ∈ {0,1}, x = 1 w.p. p
     function ln_P_ber(x::INT, p::REAL)

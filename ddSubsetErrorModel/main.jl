@@ -1,12 +1,12 @@
 include("include.jl")
-Include("config64.jl")
+Include("config.jl")
 Include("buffPhyloMatrix.jl")
 Include("sampler.jl")
 Include("inputFileParser.jl")
 
 module __result
     using Plots
-    using config64
+    using config
     using sampler
     using inputParser
 
@@ -217,7 +217,7 @@ module result
     using Plots
     using sampler
     using JLD
-    using config64
+    using config
     using inputParser
 
     function writeToJLD(sMax, lnProbs, JLDFilePath)
@@ -355,7 +355,7 @@ using sampler
 using result
 using DocOpt
 using Plots
-using config64
+using config
 pyplot()
 
 
