@@ -1,8 +1,14 @@
+Include("config.jl")
 Include("buffPhyloMatrix.jl")
 Include("sampler.jl")
+Include("inputFileParser.jl")
 
 module __result
     using Plots
+    using config
+    using sampler
+    using inputParser
+
     export sortBiClusteredMatrix
     export viewMatInHeatMap
     export viewFInHeatMap
@@ -10,6 +16,9 @@ module __result
     export viewAInHeatMap
     export viewBlockTypesInHeatMap
     export getMAPState
+    export ACF
+    export evaluateFvalueRaw
+    export evaluateFvalueFromSampleAns
 
     function sortBiClusteredMatrix(matrix, usageR, usageC)
         sortR = []
@@ -151,18 +160,92 @@ module __result
         return sMax
     end
 
+    function ACF(s::Array{R, 1})::Array{R, 1} where { R <: Real }
+        S = length(s)
+        ans::Array{R, 1} = zeros(R, S)
+        s_avg::R = sum(s) / S
+        s_se::R  = sum( (s .- s_avg) .* (s .- s_avg) ) / (S - 1.0)
+
+        for t in 1:(S-1)
+            corr::R = 0.0
+            for i in 1:(S-t)
+                corr += (s[i] - s_avg) * (s[i+t] - s_avg)
+            end
+            corr = corr / (S-t)
+            ans[t] = corr / s_se
+        end
+        return ans
+    end
+
+    function evaluateFvalueRaw(summaryPath::String, score::Array{REAL, 2}, thres::REAL = (REAL)(0.0))::Tuple{REAL,REAL,REAL}
+        summaryTemp::Array{REAL, 2} = inputParser.parseInputSummary(summaryPath)
+        summary::Array{REAL, 2}     = zeros(size(score))
+        for (x,y) in Iterators.product(1:size(summaryTemp)[1],1:size(summaryTemp)[2])
+            summary[x,y] = summaryTemp[x,y]
+        end
+        TP::INT = sum( (score .>  thres) .* (summary .>  0.0) )
+        TN::INT = sum( (score .<= thres) .* (summary .<= 0.0) )
+        FP::INT = sum( (score .>  thres) .* (summary .<= 0.0) )
+        FN::INT = sum( (score .<= thres) .* (summary .>  0.0) )
+        precision::REAL = TP / (TP + FP)
+        recall::REAL = TP / (TP + FN)
+        print("Precision: "); println(precision);
+        print("Recall: ");    println(recall);
+        fvalue::REAL = 2.0 * precision * recall / (precision + recall)
+        print("Fvalue: ");    println(fvalue);
+        return (precision, recall, fvalue)
+    end
+
+    function evaluateFvalueFromSampleAns(summaryPath::String, sampled::Sampler{INT, REAL},
+                                         thres::REAL = (REAL)(0.0),
+                                         rmError::Bool = true)::Tuple{REAL,REAL,REAL}
+        score::Array{REAL, 2}       = convert.(REAL, sampled.Z) .- 1.0
+        S::INT, M::INT = size(score)
+        if rmError
+            for (i,j) in Iterators.product(1:S, 1:M)
+                (sampled.er[j] == 2) && (score[i,j] = 0.0)
+            end
+        end
+        return evaluateFvalueRaw(summaryPath, score, thres)
+    end
+
 end
 
 module result
     using __result
     using Plots
     using sampler
+    using JLD
+    using config
+    using inputParser
+
+    function writeToJLD(sMax, lnProbs, JLDFilePath)
+        jldopen(JLDFilePath, "w") do file
+            addrequire(file, sampler)
+            write(file, "sMax", sMax)
+            write(file, "lnProbs", lnProbs)
+        end
+    end
+
+    function readFromJLD(JLDFilePath)
+        sMax = jldopen(JLDFilePath, "r") do file
+            read(file, "sMax")
+        end
+        lnProbs = jldopen(JLDFilePath, "r") do file
+            read(file, "lnProbs")
+        end
+        return sMax, lnProbs
+    end
 
     function viewMAP(sMax, lnProbs, outputDir::String)
         pyplot()
         iters = collect(1:length(lnProbs))
         plot(iters, lnProbs, size=(2000,2000))
         savefig(outputDir * "/lnProbs.png")
+
+        acf = ACF(lnProbs)
+        bar(acf)
+        savefig(outputDir * "/acf.png")
 
         println("isValid state")
         println(sampler.isValid(sMax, debug = true))
@@ -224,33 +307,45 @@ module result
         viewAInHeatMap(sMax.a, sMax.usageS, rbreak, sortR, sMax.usageV, cbreak, sortC, "MAP.a", filePath = outputDir * "/MAP_a.png")
         viewBlockTypesInHeatMap(sMax.B, sMax.usageS, rbreak, sortR, sMax.usageV, cbreak, sortC, "MAP.B", filePath = outputDir * "/MAP_B.png")
     end
+
+    function evaluateFvalue(summaryPath::String, scorePath::String, thres::REAL = (REAL)(0.0), rmError::Bool = true)::Tuple{REAL,REAL,REAL}
+        if endswith(scorePath, "jld")
+            sampled::Sampler{INT, REAL}, lnProbs::Array{REAL, 1} = readFromJLD(scorePath)
+            return evaluateFvalueFromSampleAns(summaryPath, sampled, thres, rmError)
+        else
+            score::Array{REAL, 2}       = inputParser.parseInputSummary(scorePath)
+            return evaluateFvalueRaw(summaryPath, score, thres)
+        end
+    end
+
+    function storeFvalue(outputPath::String, prescision::REAL, recall::REAL, fvalue::REAL, tag::String)
+        @assert endswith(outputPath, "jld")
+        if isfile(outputPath)
+            precisions::Dict{String, REAL} = jldopen(outputPath, "r") do file
+                read(file, "precisions")
+            end
+            recalls::Dict{String, REAL} = jldopen(outputPath, "r") do file
+                read(file, "recalls")
+            end
+            fvalues::Dict{String, REAL} = jldopen(outputPath, "r") do file
+                read(file, "fvalues")
+            end
+            precisions[tag] = prescision
+            recalls[tag] = recall
+            fvalues[tag] = fvalue
+        else
+            precisions = Dict{String,REAL}(tag=>prescision)
+            recalls = Dict{String,REAL}(tag=>recall)
+            fvalues = Dict{String,REAL}(tag=>fvalue)
+        end
+        println(precisions)
+        println(recalls)
+        println(fvalues)
+
+        jldopen(outputPath, "w") do file
+            write(file, "precisions", precisions)
+            write(file, "recalls", recalls)
+            write(file, "fvalues", fvalues)
+        end
+    end
 end
-
-using sampler
-using result
-using DocOpt
-using Plots
-pyplot()
-
-nowTime = (Dates.value(Dates.now())) #Int(Dates.now())
-cwd = pwd()
-doc = """SubsetErrorModel
-
-Usage:
-    result.jl MAP <errScore> <matScore> <patScore> <iniFile> [options]
-
-Options:
-  -o <DIR> --outDir=<DIR>  Output directory. We use current working directory if unspecified. [default: $cwd]
-  -s <SEED> --seed=<SEED>  Seed of randomness. We use current time (msec) if unspecified. [default: $nowTime]
-  -n <NUM> --number=<NUM>  Number of iteration after burnin. [default: 1000]
-  -b <BURNIN> --burnin=<BURNIN>  Number of iteration during burnin. [default: 0]
-  -t <THIN> --thin=<THIN>  Duration between sampling. [default: 1]
-  -h --help  Show this screen.
-
-"""
-# println(doc)
-args = docopt(doc)
-println(args)
-@time sMax, lnProbs  = sampler.execMAP(args["<errScore>"], args["<matScore>"], args["<patScore>"], args["<iniFile>"],
-                                       seed = parse(args["--seed"]), iter = parse(args["--number"]), thin = parse(args["--thin"]), burnin = parse(args["--burnin"]))
-result.viewMAP(sMax, lnProbs, args["--outDir"])
