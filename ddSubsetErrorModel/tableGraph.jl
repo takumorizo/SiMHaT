@@ -10,28 +10,28 @@ module tableGraph
     function init(vertexSize::I, distance::Array{R, 2})::TableGraph{I, R} where {I <: Integer, R <: Real}
         @assert size(distance)[1] == vertexSize && size(distance)[2] == vertexSize
         g::TableGraph{I, R} = TableGraph{I,R}(zeros(I, vertexSize, vertexSize), vertexSize, distance)
-        for n in 1:vertexSize
-            g.E[n, n] = 1
+        for n in (I)(1):vertexSize
+            g.E[n, n] = (I)(1)
         end
         return g
     end
 
     function DFS!(g::TableGraph{I}, from::I, S::Set{I}, both = true)::Void where {I <: Integer}
         push!(S, from)
-        for to in 1:g.V
-            ( g.E[to, from] == 1 && to ∉ S ) && (DFS!(g, (I)(to), S, both))
-            ( both && g.E[from, to] == 1 && to ∉ S ) && (DFS!(g, (I)(to), S, both))
+        for to in (I)(1):g.V
+            ( g.E[to, from] == (I)(1) && to ∉ S ) && (DFS!(g, (I)(to), S, both))
+            ( both && g.E[from, to] == (I)(1) && to ∉ S ) && (DFS!(g, (I)(to), S, both))
         end
         return nothing
     end
 
     function rmEdge!(g::TableGraph{I}, from::I, to::I)::Void where {I <: Integer}
-        g.E[to, from] = 0
+        g.E[to, from] = (I)(0)
         return nothing
     end
 
     function addEdge!(g::TableGraph{I}, from::I, to::I)::Void where {I <: Integer}
-        g.E[to, from] = 1
+        g.E[to, from] = (I)(1)
         return nothing
     end
 

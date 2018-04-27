@@ -2,10 +2,10 @@ Include("phyloMatrix.jl")
 
 module __buffPhyloMatrix
     function binaryArrayToInt(v::AbstractArray{I,1}; ascend::Bool = true)::I where {I <: Integer}
-        ans::I = 0
-        for i in 1:length(v)
+        ans::I = (I)(0)
+        for i in (I)(1):length(v)
             digit::I = (ascend) * (i-1) + (!ascend) * (length(v) - i)
-            ans += (v[i]) * (2) ^ (digit)
+            ans += (v[i]) * (I)(2) ^ (digit)
         end
         return ans
     end
@@ -27,7 +27,7 @@ module __buffPhyloMatrix
             v::Array{I,1} = zeros(I, vectorSize)
             for c in keys(usageS)
                 if B[(c,m)] == blockType
-                    v[usageS[c]] .= 1
+                    v[usageS[c]] .= (I)(1)
                 end
             end
             push!(ans, binaryArrayToInt(v))
@@ -58,23 +58,23 @@ module buffPhyloMatrix
     end
 
     function novelIndex(buffPhylo::BuffPhyloMatrix{I})::I where {I <: Integer}
-        return buffPhylo.colSize + buffPhylo.bufferUsed + 1
+        return buffPhylo.colSize + buffPhylo.bufferUsed + (I)(1)
     end
 
     function add!(buffPhylo::BuffPhyloMatrix{I}, col::I, v::AbstractArray{I,1})::Void where {I <: Integer}
-        @assert 1 <= col <= buffPhylo.colSize
+        @assert (I)(1) <= col <= buffPhylo.colSize
         phyloMatrix.add!(buffPhylo.phylo, col, v)
         return nothing
     end
 
     function rm!(buffPhylo::BuffPhyloMatrix{I}, col::I)::Void where {I <: Integer}
-        @assert 1 <= col <= buffPhylo.colSize
+        @assert (I)(1) <= col <= buffPhylo.colSize
         phyloMatrix.rm!(buffPhylo.phylo, col)
         return nothing
     end
 
     function edit!(buffPhylo::BuffPhyloMatrix{I}, row::I, col::I, value::I)::Void where {I <: Integer}
-        @assert 1 <= col <= buffPhylo.colSize
+        @assert (I)(1) <= col <= buffPhylo.colSize
         phyloMatrix.edit!(buffPhylo.phylo, row, col, value)
         return nothing
     end

@@ -26,7 +26,7 @@ module __sampler
         # param::Parameters{REAL}  = inputParser.parseConfigFile(paramPath)
         S::INT, M::INT = size(errScore)
         lnP::Array{REAL, 3} = convert.(REAL, zeros(S,M,3))
-        for (s,m) in Iterators.product(1:S,1:M)
+        for (s,m) in Iterators.product((INT)(1):S,(INT)(1):M)
             lnP[s,m,1] = errScore[s,m]
             lnP[s,m,2] = matScore[s,m]
             lnP[s,m,3] = patScore[s,m]
@@ -84,14 +84,14 @@ module __sampler
     end
 
     function ln_P_Link(L::TableGraph{I, R})::R where {I <: Integer, R <: Real}
-        ans::R = 0.0
+        ans::R = (R)(0.0)
         ln_p = zeros(R, L.V)
-        for from in 1:L.V
-            ln_p .= 0.0
+        for from in (I)(1):L.V
+            ln_p .= (R)(0.0)
             ln_p .= log.(e, L.W[:, from])
             exp_normalize!(ln_p)
             ln_p .= log.(e, ln_p)
-            for to in 1:L.V
+            for to in (I)(1):L.V
                 ans += L.E[to, from] * ln_p[to]
             end
         end
@@ -101,7 +101,7 @@ module __sampler
     function ln_P_CRP(usage::Dict{I,Array{I,1}}, α::R)::R where {R <: Real, I <: Integer}
         ans::R = (R)(0.0)
         (0 ∉ keys(usage)) && (ans += (length(keys(usage))) * log(e, α))
-        (0 ∈ keys(usage)) && (ans += (length(keys(usage))-1) * log(e, α))
+        (0 ∈ keys(usage)) && (ans += (length(keys(usage))-(I)(1)) * log(e, α))
 
         totalNum::I = 0
         for (cluster, indexes) in usage
@@ -126,7 +126,7 @@ module __sampler
 
     function ln_P_er(er::Array{I,1}, erSet::Set{I}, p_err::R)::R where {R <: Real, I <: Integer}
         ln_p_err::R = log(e, p_err)
-        ln_1m_p_err::R = log(e, 1.0 - p_err)
+        ln_1m_p_err::R = log(e, (R)(1.0) - p_err)
         return (R)(length(erSet)) * ln_p_err + (R)(length(er) - length(erSet)) * ln_1m_p_err
     end
 
@@ -194,7 +194,7 @@ module __sampler
     end
 
     function ln_P_a(a::Array{I, 1}, p_merge::R)::R where {I <: Integer, R <: Real}
-        ans::R = 0.0
+        ans::R = (R)(0.0)
         ln_p_merge::R    = log(e, p_merge)
         ln_1m_p_merge::R = log(e, 1.0 - p_merge)
         for x in a
@@ -204,7 +204,7 @@ module __sampler
     end
 
     function ln_P_f(f::Array{R, 1}, λ::Array{R, 2}, er::Array{I, 1})::R where {I <: Integer, R <: Real}
-        ans::R = 0.0
+        ans::R = (R)(0.0)
         for j in 1:length(f)
             ans += ln_P_beta(f[j], λ[er[j],1], λ[er[j],2])
         end
@@ -212,9 +212,9 @@ module __sampler
     end
 
     function ln_P_g(g::Array{I, 1}, β::Array{R, 1}, er::Array{I, 1})::R where {I <: Integer, R <: Real}
-        ans::R = 0.0
+        ans::R = (R)(0.0)
         for j in 1:length(g)
-            ans += ln_P_ber(g[j]-1, β[er[j]])
+            ans += ln_P_ber(g[j]-(I)(1), β[er[j]])
         end
         return ans
     end
@@ -232,34 +232,34 @@ module __sampler
                     param::Parameters{I, R};
                     rangeS::AbstractArray{I, 1} = (I)(1):(I)(0),
                     rangeV::AbstractArray{I, 1} = (I)(1):(I)(0))::R where {I <: Integer, R <: Real}
-        ans::R = 0.0
+        ans::R = (R)(0.0)
         S::I, M::I = size(Z)
         if length(rangeS) == 0
-            rangeS = 1:S
+            rangeS = (I)(1):S
         end
         if length(rangeV) == 0
-            rangeV = 1:M
+            rangeV = (I)(1):M
         end
         for j in rangeV
             for i in rangeS
                 c::I, m::I = (S_s[i], S_v[j])
                 if     B[c,m] == 1 # shared
-                    ans += (R)(g[j] == 2) * ln_P_ber(H[i,j]-1, param.p_hap)
-                    ans += (R)(g[j] == 1) * ln_P_ber(H[i,j]-1, 1.0 - param.p_hap)
-                    ans += ln_P_ber(Z[i,j]-1, f[j])
+                    ans += (R)(g[j] == 2) * ln_P_ber(H[i,j]-(I)(1), param.p_hap)
+                    ans += (R)(g[j] == 1) * ln_P_ber(H[i,j]-(I)(1), (R)(1.0) - param.p_hap)
+                    ans += ln_P_ber(Z[i,j]-(I)(1), f[j])
                 elseif B[c,m] == 2 # merged
-                    ans += (R)(g[j] == 2) * ln_P_ber(H[i,j]-1, param.p_hap)
-                    ans += (R)(g[j] == 1) * ln_P_ber(H[i,j]-1, 1.0 - param.p_hap)
-                    ans += (R)(a[i] == 1) * ln_P_ber(Z[i,j]-1, param.p_back)
-                    ans += (R)(a[i] == 2) * ln_P_ber(Z[i,j]-1, f[j])
+                    ans += (R)(g[j] == 2) * ln_P_ber(H[i,j]-(I)(1), param.p_hap)
+                    ans += (R)(g[j] == 1) * ln_P_ber(H[i,j]-(I)(1), (R)(1.0) - param.p_hap)
+                    ans += (R)(a[i] == 1) * ln_P_ber(Z[i,j]-(I)(1), param.p_back)
+                    ans += (R)(a[i] == 2) * ln_P_ber(Z[i,j]-(I)(1), f[j])
                 elseif B[c,m] == 3 # unique
-                    ans += (R)(g[j] == 2) * ln_P_ber(H[i,j]-1, param.p_hap)
-                    ans += (R)(g[j] == 1) * ln_P_ber(H[i,j]-1, 1.0 - param.p_hap)
-                    ans += (R)(u[j] != i) * ln_P_ber(Z[i,j]-1, param.p_unique)
-                    ans += (R)(u[j] == i) * ln_P_ber(Z[i,j]-1, f[j])
+                    ans += (R)(g[j] == 2) * ln_P_ber(H[i,j]-(I)(1), param.p_hap)
+                    ans += (R)(g[j] == 1) * ln_P_ber(H[i,j]-(I)(1), (R)(1.0) - param.p_hap)
+                    ans += (R)(u[j] != i) * ln_P_ber(Z[i,j]-(I)(1), param.p_unique)
+                    ans += (R)(u[j] == i) * ln_P_ber(Z[i,j]-(I)(1), f[j])
                 elseif B[c,m] == 4 # error
-                    ans += ln_P_ber(H[i,j]-1, 0.50)
-                    ans += ln_P_ber(Z[i,j]-1, f[j])
+                    ans += ln_P_ber(H[i,j]-(I)(1), (R)(0.50))
+                    ans += ln_P_ber(Z[i,j]-(I)(1), f[j])
                 else
                     throw("unexpected Block type @ ln_P_Y")
                 end
@@ -274,7 +274,7 @@ module __sampler
         S::I, M::I = size(Z)
         ans::R = (R)(0.0)
         for (i,j) in Iterators.product(1:S, 1:M)
-            t::I = (I)(Z[i,j] == 2) * ( 1 + H[i,j] ) + (I)(Z[i,j] == 1) * 1
+            t::I = (I)(Z[i,j] == 2) * ( (I)(1) + H[i,j] ) + (I)(Z[i,j] == 1) * 1
             ans += lnPData[i,j,t]
         end
         return ans
@@ -287,14 +287,14 @@ module __sampler
         nums::Array{R, 1} = [ (R)(length(usage[k])) for k in keys(usage)]
 
         if rmIrrerevant && (0 ∈ keys(usage))
-            irrerevantAt::I = findfirst(candidates, 0)
+            irrerevantAt::I = findfirst(candidates, (I)(0))
             deleteat!(candidates, irrerevantAt)
             deleteat!(nums, irrerevantAt)
         end
 
         if nowCluster != 0
             nowClusterAt::I = findfirst(candidates, nowCluster)
-            if nums[nowClusterAt] == 1
+            if nums[nowClusterAt] == (R)(1.0)
                 deleteat!(candidates, nowClusterAt)
                 deleteat!(nums, nowClusterAt)
             end
@@ -422,7 +422,7 @@ module __sampler
         d2::I = rmCluster!(S_pn, usageS, unUsedS, S_s)
         c1::I = addCluster!(S_np, usageS, unUsedS, S_s)
         c2::I = addCluster!(S_nn, usageS, unUsedS, S_s)
-        total::I = 0
+        total::I = (I)(0)
         for k in keys(usageS)
             total += length(usageS[k])
         end
@@ -479,11 +479,11 @@ module sampler
 
     function isValid(samp::Sampler{I, R}; debug::Bool = false)::Bool where {I <: Integer, R <: Real}
         return  __sampler.isMainValid(samp.usageS, samp.usageV, samp.B) &&
-                __sampler.isErrorValid(samp.B, samp.usageS, samp.usageV, samp.erSet, samp.treeCache, blockType = 1)
+                __sampler.isErrorValid(samp.B, samp.usageS, samp.usageV, samp.erSet, samp.treeCache, blockType = (I)(1))
     end
 
     function ln_P_all(samp::Sampler{I,R}, debug::Bool = false)::R where {I<:Integer, R<:Real}
-        ans::R = 0.0
+        ans::R = (R)(0.0)
         S::I, M::I = size(samp.Z)
         ans += __sampler.ln_P_Link(samp.L)
         ans += __sampler.ln_P_beta(samp.p_err, samp.param.γ_e[1], samp.param.γ_e[2])
@@ -519,10 +519,10 @@ module sampler
 
     function sampleZ!(samp::Sampler{I, R})::Void where {I<:Integer, R <: Real}
         S::I, M::I = size(samp.Z)
-        t::I = 0
+        t::I = (I)(0)
         ln_p::Array{R,1} = [0.0, 0.0]
         ln_f::Array{R,1} = [0.0, 0.0]
-        now_Z::I = 0
+        now_Z::I = (I)(0)
         for j in (I)(1):M
             for i in (I)(1):S
                 now_Z = samp.Z[i,j]
@@ -562,8 +562,8 @@ module sampler
         ln_p::Array{R, 1}   = [0.0, 0.0]
         ln_P_hap::Array{R, 1} = log.(e, [ 1.0 - samp.param.p_hap, samp.param.p_hap ])
         ln_P_rn::Array{R, 1}  = convert.(R, log.(e, [0.50, 0.50])) #convert.(R, log.(e, [0.50, 0.50]))
-        for j in 1:M
-            for i in 1:S
+        for j in (I)(1):M
+            for i in (I)(1):S
                 ln_p[1] = (samp.Z[i,j] == 2) * samp.lnPData[i,j, 1+1]
                 ln_p[2] = (samp.Z[i,j] == 2) * samp.lnPData[i,j, 1+2]
                 if     samp.er[j] == 1
@@ -585,8 +585,8 @@ module sampler
         ln_p_merge::Array{R, 1} = convert.(R, log.(e, [1.0 - samp.param.p_merge, samp.param.p_merge] ))
         ln_p_back::Array{R, 1}  = convert.(R, log.(e, [1.0 - samp.param.p_back, samp.param.p_back] ))
         S::I, M::I = size(samp.Z)
-        c::I = 0
-        for i in 1:S
+        c::I = (I)(0)
+        for i in (I)(1):S
             ln_p .= ln_p_merge
             c = samp.S_s[i]
             for m in keys(samp.usageV)
@@ -606,11 +606,11 @@ module sampler
     end
 
     function sampleF!(samp::Sampler{I, R})::Void where {I <: Integer, R <: Real}
-        m::I = 0
+        m::I = (I)(0)
         λ::Array{R ,1} = [0.0, 0.0]
         S::I, M::I = size(samp.Z)
 
-        for j in 1:M
+        for j in (I)(1):M
             m = samp.S_v[j]
             λ[1] = (samp.er[j] == 1) * samp.param.λ_s[1, 1] + (samp.er[j] == 2) * samp.param.λ_s[2, 1]
             λ[2] = (samp.er[j] == 1) * samp.param.λ_s[1, 2] + (samp.er[j] == 2) * samp.param.λ_s[2, 2]
@@ -630,10 +630,10 @@ module sampler
 
     function sampleG!(samp::Sampler{I, R})::Void where {I <: Integer, R <: Real}
         S::I, M::I = size(samp.Z)
-        m::I = 0
+        m::I = (I)(0)
         ln_p::Array{R, 1} = convert.(R,log.(e, [0.5, 0.5]))
         ln_P_hap::Array{R, 1} = log.(e, [ 1.0 - samp.param.p_hap, samp.param.p_hap ])
-        for j in 1:M
+        for j in (I)(1):M
             m = samp.S_v[j]
             ln_p .= samp.param.β_s
             for c in keys(samp.usageS)
@@ -653,17 +653,17 @@ module sampler
 
     function sampleU!(samp::Sampler{I, R})::Void where {I <: Integer, R <: Real}
         S::I, M::I = size(samp.Z)
-        m::I = 0
+        m::I = (I)(0)
         ln_p::Array{R, 1} = zeros(R, S)
         ln_p_unique::Array{R, 1} = convert.(R, log.(e, [1.0 - samp.param.p_unique, samp.param.p_unique]) )
         ln_p_f::Array{R, 1} = [0.0, 0.0]
 
-        for j in 1:M
+        for j in (I)(1):M
             m = samp.S_v[j]
-            ln_p .= 0.0
+            ln_p .= (R)(0.0)
             ln_p_f[1] = log(e, 1.0 - samp.f[j]); ln_p_f[2] = log(e, samp.f[j]);
 
-            ln_p_cons::R = 0.0
+            ln_p_cons::R = (R)(0.0)
             for c in keys(samp.usageS)
                 if samp.B[c,m] == 3
                     for i in samp.usageS[c]
@@ -706,7 +706,7 @@ module sampler
             end;
         )
         # acc from prev S_s, B related
-        accPrev::R = 0.0
+        accPrev::R = (R)(0.0)
         (
             accPrev += __sampler.ln_P_V(samp.Z, samp.usageS, samp.usageV, samp.B, samp.erSet,
                                         samp.treeCache, samp.param.ln_p_v);
@@ -714,7 +714,7 @@ module sampler
                                         samp.g, samp.u, samp.er, samp.param, rangeS = i:i);
         )
 
-        accNext::R = 0.0
+        accNext::R = (R)(0.0)
         (
             __sampler.updateCluster!(prevCluster, nextCluster, samp.S_s, samp.usageS, samp.unUsedS, i);
             samp.B = deepcopy(nextBs);
@@ -753,7 +753,7 @@ module sampler
         prevBs::Dict{Tuple{I,I}, I} = deepcopy(samp.B)
 
         nextEr::I = indmax( random.sampleMultiNomial((I)(1), [1.0 - samp.p_err, samp.p_err]) )
-        nextCluster::I = 0
+        nextCluster::I = (I)(0)
         (nextEr==1) && (nextCluster = __sampler.sampleCRP(samp.S_v[j], samp.usageV, samp.unUsedV, samp.param.α_v) )
         (nextEr==2) && (nextCluster = 0)
         nextF::R  = random.sampleBeta( samp.param.λ_s[nextEr, 1], samp.param.λ_s[nextEr, 2] )
@@ -778,14 +778,14 @@ module sampler
                 end;
             end;
         )
-        accPrev::R = 0.0  # acc from prev S_s, B related
+        accPrev::R = (R)(0.0)  # acc from prev S_s, B related
         (
             accPrev += __sampler.ln_P_V(samp.Z, samp.usageS, samp.usageV, samp.B, samp.erSet,
                                         samp.treeCache, samp.param.ln_p_v);
             accPrev += __sampler.ln_P_Y(samp.Z, samp.H, samp.S_s, samp.S_v, samp.B, samp.a, samp.f,
                                         samp.g, samp.u, samp.er, samp.param, rangeV = j:j);
         )
-        accNext::R = 0.0 # update prev to next state
+        accNext::R = (R)(0.0) # update prev to next state
         (
             __sampler.updateSubset!(j, prevEr, nextEr, samp.erSet, samp.er);
             __sampler.updateCacheInError!(j, prevEr, nextEr, view(samp.Z, :, j).-(I)(1), samp.treeCache);
@@ -799,7 +799,7 @@ module sampler
                                         samp.g, samp.u, samp.er, samp.param, rangeV = j:j);
         )
         # select prev/next
-        accRate::R = min(1.0, exp(accNext - accPrev))
+        accRate::R = min((R)(1.0), exp(accNext - accPrev))
         if rand() > accRate # rejected and revert to a previous state
             __sampler.updateSubset!(j, nextEr, prevEr, samp.erSet, samp.er)
             __sampler.updateCacheInError!(j, nextEr, prevEr, view(samp.Z, :, j).-(I)(1), samp.treeCache)
@@ -812,15 +812,15 @@ module sampler
     end
 
     function ln_P_Y_marginal!(samp::Sampler{I, R}, c::I)::R where {I <: Integer, R <: Real}
-        ans::R = 0.0
+        ans::R = (R)(0.0)
         ln_p::Array{R, 1} = [0.0, 0.0, 0.0]
         for m in keys(samp.usageV)
-            ln_p .= 0.0
+            ln_p .= (R)(0.0)
             now_B::I = samp.B[c,m]
             if now_B == 4
                 continue
             end
-            for b in 1:3
+            for b in (I)(1):(I)(3)
                 ln_p[b] += log(e, samp.param.δ_s[b])
                 samp.B[c,m] = b
                 ln_p[b] += __sampler.ln_P_Y(samp.Z, samp.H, samp.S_s, samp.S_v, samp.B, samp.a, samp.f,
@@ -833,27 +833,27 @@ module sampler
         return ans
     end
 
-    function ln_P_B_PartialPosterior!(samp::Sampler{I,R}, c::I, m::I)::R where {I <: Integer, R <: Real }
-        nowB::I = samp.B[c,m]
-        (nowB == 4) && (return 0.0)
-        ln_p::Array{R, 1} = convert.(R, [0.0, 0.0, 0.0])
-        for t in 1:3
-            samp.B[c, m] = t
-            ln_p[t] += log(e, samp.param.δ_s[t])
-            ln_p[t] += __sampler.ln_P_Y(samp.Z, samp.H, samp.S_s, samp.S_v, samp.B, samp.a, samp.f,
-                                        samp.g, samp.u, samp.er, samp.param,
-                                        rangeS = samp.usageS[c], rangeV = samp.usageV[m])
-        end
-        # ln_p_temp::Array{R, 1} = deepcopy(ln_p)
-        __sampler.exp_normalize!(ln_p)
-        samp.B[c, m] = nowB
-        return log(e, ln_p[nowB])
-    end
+    # function ln_P_B_PartialPosterior!(samp::Sampler{I,R}, c::I, m::I)::R where {I <: Integer, R <: Real }
+    #     nowB::I = samp.B[c,m]
+    #     (nowB == 4) && (return 0.0)
+    #     ln_p::Array{R, 1} = convert.(R, [0.0, 0.0, 0.0])
+    #     for t in (I)(1):(I)(3)
+    #         samp.B[c, m] = t
+    #         ln_p[t] += log(e, samp.param.δ_s[t])
+    #         ln_p[t] += __sampler.ln_P_Y(samp.Z, samp.H, samp.S_s, samp.S_v, samp.B, samp.a, samp.f,
+    #                                     samp.g, samp.u, samp.er, samp.param,
+    #                                     rangeS = samp.usageS[c], rangeV = samp.usageV[m])
+    #     end
+    #     # ln_p_temp::Array{R, 1} = deepcopy(ln_p)
+    #     __sampler.exp_normalize!(ln_p)
+    #     samp.B[c, m] = nowB
+    #     return log(e, ln_p[nowB])
+    # end
 
     function sampleBPatiallyGibbs!(samp::Sampler{I,R}, c::I, m::I)::Void where {I <: Integer, R <: Real }
         (samp.B[c, m] == 4) && (return nothing)
         ln_p::Array{R, 1} = convert.(R, [0.0, 0.0, 0.0])
-        for t in 1:3
+        for t in (I)(1):(I)(3)
             samp.B[c, m] = t
             ln_p[t] += log(e, samp.param.δ_s[t])
             ln_p[t] += __sampler.ln_P_Y(samp.Z, samp.H, samp.S_s, samp.S_v, samp.B, samp.a, samp.f,
@@ -876,14 +876,11 @@ module sampler
         S_nn::Set{I} = Set{I}([])
         tableGraph.diffGroup!(samp.L, S_pp, S_pn, S_np, S_nn, i, prev_to, next_to, both = true)
 
-        accPrevTrue::R = 0.0 # debug
-        accNextTrue::R = 0.0 # debug
-
         prevUsageS::Dict{I, Array{I, 1}} = deepcopy(samp.usageS)
         prevUnUsedS::Set{I}              = deepcopy(samp.unUsedS)
         prevS_s::Array{I}                = deepcopy(samp.S_s)
         prevBs::Dict{Tuple{I,I}, I}      = deepcopy(samp.B)
-        accPrev::R = 0.0
+        accPrev::R = (R)(0.0)
         (
             if correct;
                 accPrev += ln_P_Y_marginal!(samp, samp.S_s[prev_to]);
@@ -894,7 +891,7 @@ module sampler
                                             samp.treeCache, samp.param.ln_p_v);
             end;
         )
-        accNext::R = 0.0
+        accNext::R = (R)(0.0)
         (# update to proposal state
             tableGraph.rmEdge!(samp.L, i, prev_to);
             tableGraph.addEdge!(samp.L, i, next_to);
@@ -922,7 +919,7 @@ module sampler
             end;
         )
         # select prev/next
-        accRate::R = min(1.0, exp(accNext - accPrev))
+        accRate::R = min((R)(1.0), exp(accNext - accPrev))
 
         if !correct
             return nothing
@@ -980,8 +977,8 @@ module sampler
         ln_p_v_true::Array{R, 1} = samp.param.ln_p_v
         mapState::Sampler{I,R} = deepcopy(samp)
         lnProbs::Array{R, 1} = []
-        maxLn::R = -Inf
-        for count in 1:(iter+burnin)
+        maxLn::R = (R)(-Inf)
+        for count in (I)(1):(iter+burnin)
             S::I, M::I = size(samp.Z)
             __sampler.updatePenalty!((I)(count),
                                     samp.param.ln_p_v,
@@ -991,12 +988,12 @@ module sampler
             sampleZ!(samp)
             sampleH!(samp)
 
-            for i in 1:S
+            for i in (I)(1):S
                 sampleL!(samp, (I)(i), true)
             end
 
             sampleP_err!(samp)
-            for j in 1:M
+            for j in (I)(1):M
                 sampleS_v!(samp,  (I)(j))
             end
 
@@ -1035,7 +1032,7 @@ module sampler
         srand(seed)
         ln_p_v_true::Array{R, 1} = samp.param.ln_p_v
         sampled::Array{ Tuple{Sampler{I,R}, I}, 1} = []
-        for count in 1:(iter+burnin)
+        for count in (I)(1):(iter+burnin)
             S::I, M::I = size(samp.Z)
             __sampler.updatePenalty!(count,
                                     samp.param.ln_p_v,
@@ -1044,11 +1041,11 @@ module sampler
             sampleZ!(samp)
             sampleH!(samp)
 
-            for i in 1:S
+            for i in (I)(1):S
                 sampleL!(samp, i)
             end
 
-            for j in 1:M
+            for j in (I)(1):M
                 sampleS_v!(samp, j)
             end
 
@@ -1125,7 +1122,7 @@ module sampler
 
         D::Array{REAL, 2}  = distanceParser.parseBFHammingDistance(errScorePath, patScorePath, matScorePath, paramPath, "alpha_s")
         decayFunc = distanceParser.parseDecayFunction(paramPath)
-        for (i,j) in Iterators.product(1:S,1:S)
+        for (i,j) in Iterators.product((INT)(1):S,(INT)(1):S)
             (i != j) && ( D[i,j] = decayFunc(D[i,j]))
         end
         println("f(distance)")
@@ -1136,8 +1133,8 @@ module sampler
         s_v::Array{INT, 1} = convert.(INT, collect(1:M)) # init mutation wise cluster
         usageS::Dict{INT,Array{INT,1}} = Dict{INT,Array{INT,1}}()
         usageV::Dict{INT,Array{INT,1}} = Dict{INT,Array{INT,1}}()
-        for s in 1:S; usageS[s] = [s]; end
-        for m in 1:M; usageV[m] = [m]; end
+        for s in (INT)(1):S; usageS[s] = [s]; end
+        for m in (INT)(1):M; usageV[m] = [m]; end
 
         a::Array{INT, 1} = convert.(INT, fill(1, S))    # init merge sample indicator
         f::Array{REAL,1} = convert.(REAL,fill(0.90, M)) # init mutation freq for each mutation
@@ -1148,7 +1145,7 @@ module sampler
 
         # init block cluster ∈ {1,2,3,4}, 1:shared, 2:meged, 3:unique, 4:error
         B::Dict{Tuple{INT,INT},INT} = Dict{Tuple{INT,INT},INT}()
-        for (s,m) in Iterators.product(1:S,1:M); B[(s,m)] = 1; end
+        for (s,m) in Iterators.product((INT)(1):S,(INT)(1):M); B[(s,m)] = 1; end
 
         treeCache::BuffPhyloMatrix{INT} = buffPhyloMatrix.init(S, M, bufferSize = M)
 

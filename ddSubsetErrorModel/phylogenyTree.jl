@@ -8,21 +8,21 @@ module __phylogenyTree
             error("inconstent buffer2D size @__phylogenyTree.isPhylogenic")
         end
         fill!(buffer2D, (I)(0))
-        for x in 1:X
-            latest = 0
-            for y in 1:Y
-                if sortedMat[x,y] == (1 + offset)
+        for x in (I)(1):X
+            latest = (I)(0)
+            for y in (I)(1):Y
+                if sortedMat[x,y] == ((I)(1) + offset)
                     buffer2D[x,y] = latest
                     latest = y
                 end
             end
         end
         zeroCount::I = 0
-        for y in 1:Y
+        for y in (I)(1):Y
             Ly = maximum(buffer2D[:,y])
             zeroCount += (I)( (Ly == 0) && ( sum(sortedMat[:,y]) > X * offset ) )
-            for x in 1:X
-                if sortedMat[x,y] == (1 + offset) && buffer2D[x,y] != Ly
+            for x in (I)(1):X
+                if sortedMat[x,y] == ((I)(1) + offset) && buffer2D[x,y] != Ly
                     return false
                 end
             end
@@ -37,31 +37,31 @@ module __phylogenyTree
                        base::I = (I)(2),
                        descend::Bool = false,
                        offset::I = (I)(0))::Array{I,1} where {I <: Integer}
-        X,Y = size(matrix)
+        X::I, Y::I = size(matrix)
         bucket::Array{I, 2}     = zeros(base, Y)
         bucketSize::Array{I, 1} = zeros(base)
-        ans::Array{I, 1}        = collect(1:Y)
-        digitOrder = 1:X
-        if !ascendDigit; digitOrder = X:-1:1; end
+        ans::Array{I, 1}        = collect((I)(1):Y)
+        digitOrder = (I)(1):X
+        if !ascendDigit; digitOrder = X:(I)(-1):(I)(1); end
 
         for x in digitOrder
             # create bucket @ x pposition
             for y in ans
-                bucketSize[ (matrix[x,y]-offset) + 1 ] += 1
-                idx = bucketSize[ (matrix[x,y]-offset) + 1 ]
-                bucket[(matrix[x,y]-offset)+1, idx] = y
+                bucketSize[ (matrix[x,y]-offset) + (I)(1) ] += (I)(1)
+                idx = bucketSize[ (matrix[x,y]-offset) + (I)(1) ]
+                bucket[(matrix[x,y]-offset)+(I)(1), idx] = y
             end
             # bucket to ans list conversion
-            updateIdx = 1
-            for b in 1:base
-                for elem in 1:bucketSize[b]
+            updateIdx = (I)(1)
+            for b in (I)(1):base
+                for elem in (I)(1):bucketSize[b]
                     ans[updateIdx] = bucket[b,elem]
-                    updateIdx += 1
+                    updateIdx += (I)(1)
                 end
             end
-            for b in 1:base
+            for b in (I)(1):base
                 bucketSize[b] = 0
-                for y in 1:Y; bucket[b,y] = 0; end
+                for y in (I)(1):Y; bucket[b,y] = (I)(0); end
             end
         end
         if descend
@@ -89,6 +89,6 @@ module phylogenyTree
             orderY::Array{I, 1} = __phylogenyTree.radixSort(binMat,
                                                             ascendDigit = true, base = (I)(2), descend = true, offset = offset)
             buffer2D = fill((I)(0), X, Y)
-            return __phylogenyTree.isPhylogenic( view((binMat), 1:X, orderY), buffer2D, offset = offset, checkDriver = checkDriver)
+            return __phylogenyTree.isPhylogenic( view((binMat), (I)(1):X, orderY), buffer2D, offset = offset, checkDriver = checkDriver)
     end
 end

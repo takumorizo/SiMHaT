@@ -19,27 +19,27 @@ module distanceParser
         BFThreshold::REAL = parse(REAL, String(retrieve(conf, "distance", "BFThreshold")))
         alpha::REAL       = parse(REAL, String(retrieve(conf, "distance", alphaName)) )
 
-        S, M = size(errScore)
+        S::INT, M::INT = size(errScore)
         BFPat::Array{REAL, 2} = patScore .- errScore
         BFMat::Array{REAL, 2} = matScore .- errScore
         BF::Array{REAL, 2}    = max.(BFPat, BFMat)
 
         mutMat::Array{INT, 2} = map(BF) do x
            if x > BFThreshold
-               return 1
+               return (INT)(1)
            else
-               return 0
+               return (INT)(0)
            end
        end
        ans::Array{REAL, 2} = zeros(REAL, S, S)
-       for (from, to) in Iterators.product(1:S, 1:S)
-           dist::REAL = 0.0
-           for m in 1:M
+       for (from, to) in Iterators.product((INT)(1):S, (INT)(1):S)
+           dist::REAL = (REAL)(0.0)
+           for m in (INT)(1):M
                dist += (REAL)( (mutMat[from, m] != mutMat[to, m]) )
            end
            ans[to, from] = dist / M
        end
-       for i in 1:S
+       for i in (INT)(1):S
            ans[i, i] = alpha
        end
        return ans
@@ -56,13 +56,13 @@ module distanceParser
         functionType::String = String(retrieve(conf, "distance", "decayFunction"))
         a::REAL      = parse(REAL, String(retrieve(conf, "distance", "decayRate")))
         if      functionType == "Exponential"
-            return x->exp(-1.0 * x / a)
+            return x->(REAL)(exp(-1.0 * x / a))
         elseif  functionType == "Sigmoid"
-            return x->( exp(-d + a) / (1 + exp(-d+a)) )
+            return x->(REAL)(( exp(-d + a) / (1 + exp(-d+a)) ))
         elseif  functionType == "Window"
             return x->( (REAL)( x < a ) )
         elseif  functionType == "Uniform"
-            return x->1
+            return x->(REAL)(1)
         else
             error("unexpected type of decay functions!")
         end
