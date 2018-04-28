@@ -34,43 +34,6 @@ module __sampler
         return lnP
     end
 
-    # #TODO: this is a temporaly function.
-    # function setDistance(errScorePath::String,
-    #                      patScorePath::String,
-    #                      matScorePath::String,
-    #                      alpha::REAL = 0.1,
-    #                      thresBF::REAL = 0.0)::Array{REAL, 2}
-    #     errScore::Array{REAL, 2} = inputParser.parseInputSummary(errScorePath)
-    #     matScore::Array{REAL, 2} = inputParser.parseInputSummary(matScorePath)
-    #     patScore::Array{REAL, 2} = inputParser.parseInputSummary(patScorePath)
-    #
-    #     BFPat::Array{REAL, 2} = patScore .- errScore
-    #     BFMat::Array{REAL, 2} = matScore .- errScore
-    #     BF::Array{REAL, 2}    = max.(BFPat, BFMat)
-    #
-    #     S, M = size(errScore)
-    #     mutMat::Array{INT, 2} = map(BF) do x
-    #        if x > thresBF
-    #            return 1
-    #        else
-    #            return 0
-    #        end
-    #    end
-    #    ans::Array{REAL, 2} = zeros(REAL, S, S)
-    #    for (from,to) in Iterators.product(1:S,1:S)
-    #        # dist::REAL = 0.0
-    #        # for m in 1:M
-    #        #     dist += (REAL)( (mutMat[from, m] != mutMat[to, m]) )
-    #        # end
-    #        # ans[to, from] = dist / S
-    #        ans[to, from] = 1.0
-    #    end
-    #    for i in 1:S
-    #        ans[i, i] = alpha
-    #    end
-    #    return ans
-    # end
-
     function exp_normalize!(ln_p::Array{R,1})::Void where {R <: Real}
         ln_p .= (ln_p .- maximum(ln_p))
         ln_p .= exp.(ln_p)
@@ -371,11 +334,9 @@ module __sampler
 
     function updatePenalty!(iter::I,
                             ln_p_penalty::Array{R, 1},
-                            ln_p_generous::Array{R, 1},
-                            ln_p_rigorous::Array{R, 1},
+                            ln_p_ladders::Array{R, 2},
                             period::I)::Void where {I <: Integer, R <: Real}
-        (iter % period <  div(period, 2)) && (ln_p_penalty .= ln_p_generous )
-        (iter % period >= div(period, 2)) && (ln_p_penalty .= ln_p_rigorous )
+        ln_p_penalty .= ln_p_ladders[(div(iter, period) % length(ln_p_ladders[:,1]))+1, :]
         return nothing
     end
 
@@ -833,23 +794,6 @@ module sampler
         return ans
     end
 
-    # function ln_P_B_PartialPosterior!(samp::Sampler{I,R}, c::I, m::I)::R where {I <: Integer, R <: Real }
-    #     nowB::I = samp.B[c,m]
-    #     (nowB == 4) && (return 0.0)
-    #     ln_p::Array{R, 1} = convert.(R, [0.0, 0.0, 0.0])
-    #     for t in (I)(1):(I)(3)
-    #         samp.B[c, m] = t
-    #         ln_p[t] += log(e, samp.param.δ_s[t])
-    #         ln_p[t] += __sampler.ln_P_Y(samp.Z, samp.H, samp.S_s, samp.S_v, samp.B, samp.a, samp.f,
-    #                                     samp.g, samp.u, samp.er, samp.param,
-    #                                     rangeS = samp.usageS[c], rangeV = samp.usageV[m])
-    #     end
-    #     # ln_p_temp::Array{R, 1} = deepcopy(ln_p)
-    #     __sampler.exp_normalize!(ln_p)
-    #     samp.B[c, m] = nowB
-    #     return log(e, ln_p[nowB])
-    # end
-
     function sampleBPatiallyGibbs!(samp::Sampler{I,R}, c::I, m::I)::Void where {I <: Integer, R <: Real }
         (samp.B[c, m] == 4) && (return nothing)
         ln_p::Array{R, 1} = convert.(R, [0.0, 0.0, 0.0])
@@ -982,8 +926,8 @@ module sampler
             S::I, M::I = size(samp.Z)
             __sampler.updatePenalty!((I)(count),
                                     samp.param.ln_p_v,
-                                    samp.anneal.ln_p_generous,
-                                    samp.anneal.ln_p_rigorous, samp.anneal.period)
+                                    samp.anneal.ln_p_ladders,
+                                    samp.anneal.period)
 
             sampleZ!(samp)
             sampleH!(samp)
@@ -1034,10 +978,10 @@ module sampler
         sampled::Array{ Tuple{Sampler{I,R}, I}, 1} = []
         for count in (I)(1):(iter+burnin)
             S::I, M::I = size(samp.Z)
-            __sampler.updatePenalty!(count,
+            __sampler.updatePenalty!((I)(count),
                                     samp.param.ln_p_v,
-                                    samp.anneal.ln_p_generous,
-                                    samp.anneal.ln_p_rigorous, samp.anneal.period)
+                                    samp.anneal.ln_p_ladders,
+                                    samp.anneal.period)
             sampleZ!(samp)
             sampleH!(samp)
 

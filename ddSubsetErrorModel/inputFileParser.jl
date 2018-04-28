@@ -9,8 +9,7 @@ module inputParser
 
     type Annealer{I <: Integer, R <: Real}
         period::I
-        ln_p_generous::Array{R, 1}
-        ln_p_rigorous::Array{R, 1}
+        ln_p_ladders::Array{R, 2}
     end
 
     type Parameters{I <: Integer, R <: Real}
@@ -66,12 +65,17 @@ module inputParser
 
         period    = parse(REAL, String(retrieve(conf, "annealer", "period")) )
 
-        ln_1m_p_g = parse(REAL, String(retrieve(conf, "annealer", "ln_p_generous")) )
-        ln_p_g    = log(e, (REAL)(1.0) - exp(ln_1m_p_v))
+        ln_p_ladders_strings = (retrieve(conf, "annealer", "ln_p_ladders"))
+        ln_p_ladders = zeros(REAL, length(ln_p_ladders_strings), 2)
 
-        ln_1m_p_r = parse(REAL, String(retrieve(conf, "annealer", "ln_p_rigorous")) )
-        ln_p_r    = log(e, (REAL)(1.0) - exp(ln_1m_p_v))
-
+        for i in (INT)(1):(INT)(length(ln_p_ladders_strings))
+            step = String(ln_p_ladders_strings[i])
+            print("step: "); println(step)
+            ln_1m_p_step = parse(REAL, step)
+            ln_p_step    = log(e, (REAL)(1.0) - exp(ln_1m_p_step))
+            ln_p_ladders[i, 1] = ln_p_step
+            ln_p_ladders[i, 2] = ln_1m_p_step
+        end
 
         return (Parameters{INT,REAL}(α_s, α_v,
                                     [δ_s, δ_m, δ_u],
@@ -79,7 +83,7 @@ module inputParser
                                     [β_smu, β_e], [γ_e_0, γ_e_1],
                                     p_merge, p_hap, p_back, p_unique,
                                     [ln_p_v, ln_1m_p_v]),
-               Annealer{INT, REAL}(period, [ln_1m_p_g, ln_p_g], [ln_1m_p_r, ln_p_r]))
+               Annealer{INT, REAL}(period, ln_p_ladders))
     end
 
     function parseInputSummary(summaryPath::String)::Array{REAL, 2}
