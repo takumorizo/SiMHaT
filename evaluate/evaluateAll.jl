@@ -2,6 +2,10 @@ using JLD
 const REAL = Float64
 const INT  = Int64
 using Plots
+
+fontScale = 2
+Plots.scalefontsizes(fontScale)
+
 pyplot()
 
 

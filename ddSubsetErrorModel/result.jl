@@ -20,6 +20,39 @@ module __result
     export evaluateFvalueRaw
     export evaluateFvalueFromSampleAns
 
+    function sortBiClusteredMatrix(matrix, usageR, usageC, B)
+        cKeys = []
+        for c in keys(usageC)
+            num = 0
+            for r in keys(usageR)
+                num += (B[r,c] == 1)
+                num -= (B[r,c] == 4)
+            end
+            append!(cKeys, tuple([c, num]))
+        end
+        sort!(cKeys, by = x -> x[2], rev = true)
+        sortR = []
+        sortC = []
+        rBreaks = []
+        cBreaks = []
+        for x in cKeys
+            append!(sortC, usageC[x[1]])
+            push!(cBreaks, length(usageC[x[1]]))
+        end
+        for (key, array) in usageR
+            append!(sortR, array)
+            push!(rBreaks, length(array))
+        end
+        for i in 1:(length(rBreaks)-1)
+            rBreaks[i+1] += rBreaks[i]
+        end
+        for i in 1:(length(cBreaks)-1)
+            cBreaks[i+1] += cBreaks[i]
+        end
+        return (matrix[sortR, sortC], rBreaks, sortR, cBreaks, sortC)
+    end
+
+
     function sortBiClusteredMatrix(matrix, usageR, usageC)
         sortR = []
         sortC = []
@@ -46,9 +79,9 @@ module __result
                               filePath = "", clim = nothing)
         pyplot()
         (clim == nothing) && heatmap(yflip=true, xticks = (1:size(matrix,2),sortC),
-                             yticks = (1:size(matrix,1),sortR), matrix, title = title, size=(2000,2000), c=:ice)
+                             yticks = (1:size(matrix,1),sortR), matrix, title = title, size=(2000,2000), c=:Blues)
         (clim != nothing) && heatmap(yflip=true, xticks = (1:size(matrix,2),sortC),
-                             yticks = (1:size(matrix,1),sortR), matrix, title = title, clim = clim, size=(2000,2000), c=:ice)
+                             yticks = (1:size(matrix,1),sortR), matrix, title = title, clim = clim, size=(2000,2000), c=:Blues)
         hline!(rBreaks .+ 0.5)
         vline!(cBreaks .+ 0.5)
         if filePath != ""
@@ -70,7 +103,7 @@ module __result
         end
         matrix = matrix[sortR, sortC]
         heatmap(yflip=true, xticks = (1:size(matrix,2),sortC),
-                yticks = (1:size(matrix,1),sortR), clim = (0.7, 1.0), matrix, title = title, size=(2000,2000), c=:ice)
+                yticks = (1:size(matrix,1),sortR), clim = (0.7, 1.0), matrix, title = title, size=(2000,2000), c=:Blues)
         hline!(rBreaks .+ 0.5)
         vline!(cBreaks .+ 0.5)
         if filePath != ""
@@ -92,7 +125,7 @@ module __result
         end
         matrix = matrix[sortR, sortC]
         heatmap(yflip=true, xticks = (1:size(matrix,2),sortC),
-                yticks = (1:size(matrix,1),sortR), clim = (0,1), matrix, title = title, size=(2000,2000), c=:ice)
+                yticks = (1:size(matrix,1),sortR), clim = (0,1), matrix, title = title, size=(2000,2000), c=:Blues)
         hline!(rBreaks .+ 0.5)
         vline!(cBreaks .+ 0.5)
         if filePath != ""
@@ -114,7 +147,7 @@ module __result
         end
         matrix = matrix[sortR, sortC]
         heatmap(yflip=true, xticks = (1:size(matrix,2),sortC),
-                yticks = (1:size(matrix,1),sortR), clim = (1,2), matrix, title = title, size=(2000,2000), c=:ice)
+                yticks = (1:size(matrix,1),sortR), clim = (1,2), matrix, title = title, size=(2000,2000), c=:Blues)
         hline!(rBreaks .+ 0.5)
         vline!(cBreaks .+ 0.5)
         if filePath != ""
@@ -249,7 +282,7 @@ module result
 
         println("isValid state")
         println(sampler.isValid(sMax, debug = true))
-        mat, rbreak, sortR, cbreak, sortC = sortBiClusteredMatrix(sMax.Z, sMax.usageS, sMax.usageV)
+        mat, rbreak, sortR, cbreak, sortC = sortBiClusteredMatrix(sMax.Z, sMax.usageS, sMax.usageV, sMax.B)
 
         # println("MAP, B")
         # println(sMax.B)
