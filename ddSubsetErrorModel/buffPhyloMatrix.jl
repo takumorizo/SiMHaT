@@ -11,7 +11,9 @@ module __buffPhyloMatrix
     end
 
     function intToBinaryArray(num::I, vectorSize::I; ascend::Bool = true)::Array{I, 1} where {I <: Integer}
-        v::Array{I, 1} = digits(num, 2, vectorSize)
+        v::Array{I, 1} = digits(typeof(num), num, base=(I)(2), pad=(Int)(vectorSize))
+        # The reason for 'pad' to be typed as ::Int is the inner implementations of intfuncs.jl.
+        # This should be fixed in the later versions of julia...
         if !ascend
             v = v[length(v):-1:1]
         end
@@ -37,11 +39,11 @@ module __buffPhyloMatrix
 end
 
 module buffPhyloMatrix
-    using phyloMatrix
-    using __phyloMatrix
-    using __buffPhyloMatrix
+    using ..phyloMatrix
+    using ..__phyloMatrix
+    using ..__buffPhyloMatrix
 
-    type BuffPhyloMatrix{I}
+    mutable struct BuffPhyloMatrix{I}
         phylo::PhyloMatrix{I}
         colSize::I
         bufferSize::I
@@ -61,19 +63,19 @@ module buffPhyloMatrix
         return buffPhylo.colSize + buffPhylo.bufferUsed + (I)(1)
     end
 
-    function add!(buffPhylo::BuffPhyloMatrix{I}, col::I, v::AbstractArray{I,1})::Void where {I <: Integer}
+    function add!(buffPhylo::BuffPhyloMatrix{I}, col::I, v::AbstractArray{I,1})::Nothing where {I <: Integer}
         @assert (I)(1) <= col <= buffPhylo.colSize
         phyloMatrix.add!(buffPhylo.phylo, col, v)
         return nothing
     end
 
-    function rm!(buffPhylo::BuffPhyloMatrix{I}, col::I)::Void where {I <: Integer}
+    function rm!(buffPhylo::BuffPhyloMatrix{I}, col::I)::Nothing where {I <: Integer}
         @assert (I)(1) <= col <= buffPhylo.colSize
         phyloMatrix.rm!(buffPhylo.phylo, col)
         return nothing
     end
 
-    function edit!(buffPhylo::BuffPhyloMatrix{I}, row::I, col::I, value::I)::Void where {I <: Integer}
+    function edit!(buffPhylo::BuffPhyloMatrix{I}, row::I, col::I, value::I)::Nothing where {I <: Integer}
         @assert (I)(1) <= col <= buffPhylo.colSize
         phyloMatrix.edit!(buffPhylo.phylo, row, col, value)
         return nothing
@@ -83,7 +85,7 @@ module buffPhyloMatrix
         return phyloMatrix.isTree(buffPhylo.phylo)
     end
 
-    function push!(buffPhylo::BuffPhyloMatrix{I}, v::AbstractArray{I,1})::Void where {I <: Integer}
+    function push!(buffPhylo::BuffPhyloMatrix{I}, v::AbstractArray{I,1})::Nothing where {I <: Integer}
         @assert buffPhylo.bufferUsed < buffPhylo.bufferSize
         nextIndex::I = novelIndex(buffPhylo)
         Base.push!(buffPhylo.addedSetInBuffer, __buffPhyloMatrix.binaryArrayToInt(v))
@@ -92,7 +94,7 @@ module buffPhyloMatrix
         return nothing
     end
 
-    function pop!(buffPhylo::BuffPhyloMatrix{I})::Void where {I <: Integer}
+    function pop!(buffPhylo::BuffPhyloMatrix{I})::Nothing where {I <: Integer}
         if buffPhylo.bufferUsed > 0
             rmIndex::I = novelIndex(buffPhylo) - (I)(1)
             Base.pop!(buffPhylo.addedSetInBuffer, __buffPhyloMatrix.binaryArrayToInt(view(buffPhylo.phylo.cache.matrix, : , rmIndex + 1 )))
@@ -102,7 +104,7 @@ module buffPhyloMatrix
         return nothing
     end
 
-    function clearBuffer!(buffPhylo::BuffPhyloMatrix{I})::Void where {I <: Integer}
+    function clearBuffer!(buffPhylo::BuffPhyloMatrix{I})::Nothing where {I <: Integer}
         while buffPhylo.bufferUsed > 0
             pop!(buffPhylo)
         end
@@ -113,7 +115,7 @@ module buffPhyloMatrix
                      B::Dict{Tuple{I,I}, I},
                      usageS::Dict{I,Array{I,1}},
                      usageV::Dict{I,Array{I,1}};
-                     blockType::I = (I)(1))::Void where {I <: Integer}
+                     blockType::I = (I)(1))::Nothing where {I <: Integer}
         R::I = buffPhylo.phylo.cache.R
         setNext::Set{I} = __buffPhyloMatrix.summaryBits(B, usageS, usageV, R,
                                                         blockType = blockType)

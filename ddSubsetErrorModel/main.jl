@@ -3,11 +3,12 @@ Include("result.jl")
 Include("config.jl")
 Include("sampler.jl")
 
-using sampler
-using result
+using ..sampler
+using ..result
 using DocOpt
 using Plots
-using config
+using Dates
+using ..config
 pyplot()
 
 
@@ -38,10 +39,10 @@ println(args)
 if args["MAP"] == "MAP"
     @time sMax, lnProbs  = sampler.execMAP(args["<errScore>"], args["<matScore>"], args["<patScore>"], args["<iniFile>"],
                                            seed = parse(INT, args["--seed"]), iter = parse(INT, args["--number"]), thin = parse(INT, args["--thin"]), burnin = parse(INT, args["--burnin"]))
-    result.writeToJLD(sMax, lnProbs, args["--outDir"] * "/sampleAns.jld")
+    # result.writeToJLD(sMax, lnProbs, args["--outDir"] * "/sampleAns.jld")
     result.viewMAP(sMax, lnProbs, args["--outDir"])
 elseif args["EVAL"] == "EVAL"
-    precision, recall, fvalue = result.evaluateFvalue(args["<answer>"], args["<score>"], parse(REAL, args["--threshold"]), args["--rmError"])
-    println((precision, recall, fvalue))
-    result.storeFvalue(args["<result>"], precision, recall, fvalue, String(args["--tag"]))
+    # precision, recall, fvalue = result.evaluateFvalue(args["<answer>"], args["<score>"], parse(REAL, args["--threshold"]), args["--rmError"])
+    # println((precision, recall, fvalue))
+    # result.storeFvalue(args["<result>"], precision, recall, fvalue, String(args["--tag"]))
 end

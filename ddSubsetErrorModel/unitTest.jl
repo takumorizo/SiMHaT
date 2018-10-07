@@ -5,7 +5,7 @@ Include("phyloMatrix.jl")
 Include("buffPhyloMatrix.jl")
 
 module __phylogenyTreeTest
-    function makeTreeMatrixRandomly!(mat::Array{Int, 2}, rangeX, rangeY, p = 0.5, divRange=1:3)::Void
+    function makeTreeMatrixRandomly!(mat::Array{Int, 2}, rangeX, rangeY, p = 0.5, divRange=1:3)::Nothing
         for (x,y) in Iterators.product(rangeX,rangeY)
              mat[x,y] = 0
         end
@@ -38,13 +38,14 @@ module __phylogenyTreeTest
 end
 
 module phylogenyTreeTest
-    using Base.Test
+    using Test
+    using Random
 
-    using phylogenyTree
-    using __phylogenyTree
-    using __phylogenyTreeTest
+    using ..phylogenyTree
+    using ..__phylogenyTree
+    using ..__phylogenyTreeTest
 
-    function runAllTest()::Void
+    function runAllTest()::Nothing
         """ radix sort test """
         radixResults      = []
         phyloCheckResults = []
@@ -60,7 +61,8 @@ module phylogenyTreeTest
                 randNum = rand(range)
                 push!(allNums, randNum)
                 for x in 1:binSize
-                    mat[x,y] = parse(Int,bin(randNum, binSize)[x])
+                    # mat[x,y] = parse(Int,bin(randNum, binSize)[x])
+                    mat[x,y] = parse(Int,string(randNum, base=2, pad=binSize)[x])
                 end
             end
 
@@ -77,7 +79,7 @@ module phylogenyTreeTest
             Y = 50
             treeMat = zeros(Int, X, Y);
             __phylogenyTreeTest.makeTreeMatrixRandomly!(treeMat, 1:X, 1:Y);
-            push!(phyloCheckResults, phylogenyTree.isPhylogenic( treeMat[ randperm(X), randperm(Y)] ))
+            push!(phyloCheckResults, phylogenyTree.isPhylogenic( treeMat[ Random.randperm(X), Random.randperm(Y)] ))
         end
 
         @testset "radix sort"     begin
@@ -92,8 +94,8 @@ end
 
 
 module __sortingCache2DTest
-    using phylogenyTree
-    using __phylogenyTree
+    using ..phylogenyTree
+    using ..__phylogenyTree
     function genRandom2DMatrices(D::I, N::I;
                                  descend::Bool = true,
                                  ascendDigit::Bool = false,
@@ -104,7 +106,8 @@ module __sortingCache2DTest
         end
         matrix = zeros(I, D, N)
         for i in 1:N
-            aDigits = digits(array[i], 2, D)
+            aDigits = digits(array[i], base=2, pad=D)
+
             aDigits = aDigits[length(aDigits):-1:1] # println(array[i]); println(aDigits)
             matrix[:,i] = aDigits
         end
@@ -150,7 +153,7 @@ module __sortingCache2DTest
         return LLLeft, LLRight
     end
 
-    function makeTreeMatrixRandomly!(mat::Array{I, 2}, rangeX, rangeY, p = 0.5, divRange=1:3)::Void where {I <: Integer}
+    function makeTreeMatrixRandomly!(mat::Array{I, 2}, rangeX, rangeY, p = 0.5, divRange=1:3)::Nothing where {I <: Integer}
         for (x,y) in Iterators.product(rangeX,rangeY)
              mat[x,y] = 0
         end
@@ -198,14 +201,14 @@ module __sortingCache2DTest
 end
 
 module sortingCache2DTest
-    using Base.Test
-    using __phylogenyTree
-    using phylogenyTree
-    using __sortingCache2D
-    using sortingCache2D
-    using __sortingCache2DTest
+    using Test
+    using ..__phylogenyTree
+    using ..phylogenyTree
+    using ..__sortingCache2D
+    using ..sortingCache2D
+    using ..__sortingCache2DTest
 
-    function runAllTest()::Void
+    function runAllTest()::Nothing
         # @time @testset "add!/rm! time check random naive"  begin
         #     for i in 1:1
         #         N = 1000
@@ -400,7 +403,7 @@ module sortingCache2DTest
                 end
                 matrix = zeros(Int64,D, N)
                 for i in 1:N
-                    aDigits = digits(array[i], 10, D)
+                    aDigits = digits(array[i], base=10, pad=D)
                     aDigits = aDigits[length(aDigits):-1:1] # println(array[i]); println(aDigits)
                     matrix[:,i] = aDigits
                 end
@@ -425,7 +428,7 @@ module sortingCache2DTest
                 end
                 matrix = zeros(Int64,D, N)
                 for i in 1:N
-                    aDigits = digits(array[i], 10, D)
+                    aDigits = digits(array[i], base=10, pad=D)
                     aDigits = aDigits[length(aDigits):-1:1] # println(array[i]); println(aDigits)
                     matrix[:,i] = aDigits
                 end
@@ -444,8 +447,8 @@ module sortingCache2DTest
             for i in 1:100
                 a = abs(rand(Int)) % 100000
                 b = abs(rand(Int)) % 100000
-                aDigits = digits(a, 10, 10)
-                bDigits = digits(b, 10, 10)
+                aDigits = digits(a, base=10, pad=10)
+                bDigits = digits(b, base=10, pad=10)
 
                 aDigits = aDigits[length(aDigits):-1:1]
                 bDigits = bDigits[length(bDigits):-1:1]
@@ -457,8 +460,8 @@ module sortingCache2DTest
             for i in 1:100
                 a = abs(rand(Int)) % 100000
                 b = abs(rand(Int)) % 100000
-                aDigits = digits(a, 10, 10)
-                bDigits = digits(b, 10, 10)
+                aDigits = digits(a, base=10, pad=10)
+                bDigits = digits(b, base=10, pad=10)
                 aDigits = aDigits[length(aDigits):-1:1]
                 bDigits = bDigits[length(bDigits):-1:1]
 
@@ -469,8 +472,8 @@ module sortingCache2DTest
             for i in 1:100
                 a = abs(rand(Int)) % 100000
                 b = abs(rand(Int)) % 100000
-                aDigits = digits(a, 10, 10)
-                bDigits = digits(b, 10, 10)
+                aDigits = digits(a, base=10, pad=10)
+                bDigits = digits(b, base=10, pad=10)
                 aDigits = aDigits[length(aDigits):-1:1]
                 bDigits = bDigits[length(bDigits):-1:1]
 
@@ -483,10 +486,10 @@ module sortingCache2DTest
 end
 
 module __phyloMatrixTest
-    using phylogenyTree
-    using __phylogenyTree
+    using ..phylogenyTree
+    using ..__phylogenyTree
 
-    function makeTreeMatrixRandomly!(mat::Array{I, 2}, rangeX, rangeY, p = 0.5, divRange=1:3)::Void where {I <: Integer}
+    function makeTreeMatrixRandomly!(mat::Array{I, 2}, rangeX, rangeY, p = 0.5, divRange=1:3)::Nothing where {I <: Integer}
         for (x,y) in Iterators.product(rangeX,rangeY)
              mat[x,y] = 0
         end
@@ -533,16 +536,16 @@ module __phyloMatrixTest
 end
 
 module phyloMatrixTest
-    using Base.Test
-    using __sortingCache2DTest
-    using phyloMatrix
-    using __phyloMatrixTest
-    using phylogenyTree
-    using __phylogenyTree
+    using Test
+    using ..__sortingCache2DTest
+    using ..phyloMatrix
+    using ..__phyloMatrixTest
+    using ..phylogenyTree
+    using ..__phylogenyTree
 
-    using sortingCache2D
+    using ..sortingCache2D
 
-    function runAllTest()::Void
+    function runAllTest()::Nothing
         @time @testset "add!/rm! time check cache"  begin
             for i in 1:1
                 N = 1000
@@ -720,17 +723,17 @@ module __buffPhyloMatrixTest
 end
 
 module buffPhyloMatrixTest
-    using Base.Test
-    using __sortingCache2DTest
-    using phyloMatrix
-    using __phyloMatrixTest
-    using phylogenyTree
-    using __phylogenyTree
-    using buffPhyloMatrix
-    using __buffPhyloMatrix
-    using __buffPhyloMatrixTest
+    using Test
+    using ..__sortingCache2DTest
+    using ..phyloMatrix
+    using ..__phyloMatrixTest
+    using ..phylogenyTree
+    using ..__phylogenyTree
+    using ..buffPhyloMatrix
+    using ..__buffPhyloMatrix
+    using ..__buffPhyloMatrixTest
 
-    function runAllTest()::Void
+    function runAllTest()::Nothing
         @time @testset "add! BuffPhyloMat random"  begin
             for i in 1:1000
                 N = 200

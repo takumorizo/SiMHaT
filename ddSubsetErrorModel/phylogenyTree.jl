@@ -74,7 +74,7 @@ end
 
 
 module phylogenyTree
-    using __phylogenyTree
+    using ..__phylogenyTree
     function isPhylogenic(binMat::AbstractArray{I, 2};
                           offset::I = (I)(0),
                           checkDriver::Bool = false,

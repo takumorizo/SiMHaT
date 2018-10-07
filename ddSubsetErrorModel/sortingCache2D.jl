@@ -241,9 +241,9 @@ end
 
 
 module sortingCache2D
-    using __sortingCache2D
+    using ..__sortingCache2D
 
-    type SortingCache2D{I}
+    mutable struct SortingCache2D{I}
         matrix::Array{I,2}  # R * (1+C+1+bufferSize)
         LLLeft::Array{I,2}  # R * (1+C+1+bufferSize)
         LLRight::Array{I,2} # R * (1+C+1+bufferSize)
@@ -280,7 +280,7 @@ module sortingCache2D
                 descend, linkedValue)
     end
 
-    function add!(cache::SortingCache2D{I}, col::I, v::AbstractArray{I,1})::Void where {I <: Integer}
+    function add!(cache::SortingCache2D{I}, col::I, v::AbstractArray{I,1})::Nothing where {I <: Integer}
         privateCol::I = at(cache, col)
         @assert privateCol ∉ cache.sortedCols && ((I)(1) <= col <= cache.C)
         addAt::I = __sortingCache2D.binSearch!(cache.matrix, cache.sortedCols,
@@ -290,17 +290,18 @@ module sortingCache2D
         return nothing
     end
 
-    function rm!(cache::SortingCache2D{I}, col::I)::Void where {I <: Integer}
+    function rm!(cache::SortingCache2D{I}, col::I)::Nothing where {I <: Integer}
         privateCol::I = at(cache, col)
         @assert privateCol ∈ cache.sortedCols && ((I)(1) <= col <= cache.C)
-        rmAt::I = findfirst(cache.sortedCols, privateCol)
+        # rmAt::I = findfirst(cache.sortedCols, privateCol)
+        rmAt::I = something(findfirst(isequal(privateCol), cache.sortedCols), 0)
         __sortingCache2D.rmLinkedList!(cache.matrix, cache.LLLeft, cache.LLRight,
                                        cache.sortedCols, rmAt)
         deleteat!(cache.sortedCols, rmAt)
         return nothing
     end
 
-    function edit!(cache::SortingCache2D{I}, row::I, col::I, value::I)::Void where {I <: Integer}
+    function edit!(cache::SortingCache2D{I}, row::I, col::I, value::I)::Nothing where {I <: Integer}
         @assert (I)(1) <= row <= cache.R
         privateCol::I = at(cache, col)
         if cache.matrix[row, privateCol] == value

@@ -1,7 +1,7 @@
 Include("config.jl")
 
 module random
-    using config
+    using ..config
     using Distributions
 
     export sampleMultiNomial, sampleBeta

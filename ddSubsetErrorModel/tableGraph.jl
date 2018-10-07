@@ -1,7 +1,7 @@
 
 module tableGraph
     export TableGraph
-    type TableGraph{I, R}
+    mutable struct TableGraph{I, R}
         E::Array{I, 2} # edge[to, from] = 1
         V::I
         W::Array{R, 2}
@@ -16,7 +16,7 @@ module tableGraph
         return g
     end
 
-    function DFS!(g::TableGraph{I}, from::I, S::Set{I}, both = true)::Void where {I <: Integer}
+    function DFS!(g::TableGraph{I}, from::I, S::Set{I}, both = true)::Nothing where {I <: Integer}
         push!(S, from)
         for to in (I)(1):g.V
             ( g.E[to, from] == (I)(1) && to ∉ S ) && (DFS!(g, (I)(to), S, both))
@@ -25,24 +25,25 @@ module tableGraph
         return nothing
     end
 
-    function rmEdge!(g::TableGraph{I}, from::I, to::I)::Void where {I <: Integer}
+    function rmEdge!(g::TableGraph{I}, from::I, to::I)::Nothing where {I <: Integer}
         g.E[to, from] = (I)(0)
         return nothing
     end
 
-    function addEdge!(g::TableGraph{I}, from::I, to::I)::Void where {I <: Integer}
+    function addEdge!(g::TableGraph{I}, from::I, to::I)::Nothing where {I <: Integer}
         g.E[to, from] = (I)(1)
         return nothing
     end
 
     function getLink(g::TableGraph{I}, i::I) where {I <: Integer}
-        return findfirst(g.E[:, i], (I)(1))
+        # return findfirst(g.E[:, i], (I)(1))
+        return something(findfirst(isequal((I)(1)), g.E[:, i]), 0)
     end
 
 
     function diffGroup!(g::TableGraph{I, R},
                         S_pp::Set{I}, S_pn::Set{I}, S_np::Set{I}, S_nn::Set{I},
-                        from::I, to_prev::I, to_next::I; both = true)::Void where {I <: Integer, R <: Real}
+                        from::I, to_prev::I, to_next::I; both = true)::Nothing where {I <: Integer, R <: Real}
         DFS!(g, to_prev, S_pp, both)
         DFS!(g, to_next, S_pn, both)
 

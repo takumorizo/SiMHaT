@@ -2,17 +2,17 @@ Include("config.jl")
 
 module inputParser
     using ConfParser
-    using config
+    using ..config
 
     export Parameters
     export Annealer
 
-    type Annealer{I <: Integer, R <: Real}
+    mutable struct Annealer{I <: Integer, R <: Real}
         period::I
         ln_p_ladders::Array{R, 2}
     end
 
-    type Parameters{I <: Integer, R <: Real}
+    mutable struct Parameters{I <: Integer, R <: Real}
         α_s::R
         α_v::R # dirichlet process hyper parameter for sample/variant
 
@@ -61,7 +61,7 @@ module inputParser
         p_unique  = parse(REAL, String(retrieve(conf, "model", "p_unique")) )
 
         ln_1m_p_v = parse(REAL, String(retrieve(conf, "model", "ln_1m_p_v")) )
-        ln_p_v    = log(e, (REAL)(1.0) - exp(ln_1m_p_v))
+        ln_p_v    = log(ℯ, (REAL)(1.0) - exp(ln_1m_p_v))
 
         period    = parse(REAL, String(retrieve(conf, "annealer", "period")) )
 
@@ -72,7 +72,7 @@ module inputParser
             step = String(ln_p_ladders_strings[i])
             print("step: "); println(step)
             ln_1m_p_step = parse(REAL, step)
-            ln_p_step    = log(e, (REAL)(1.0) - exp(ln_1m_p_step))
+            ln_p_step    = log(ℯ, (REAL)(1.0) - exp(ln_1m_p_step))
             ln_p_ladders[i, 1] = ln_p_step
             ln_p_ladders[i, 2] = ln_1m_p_step
         end

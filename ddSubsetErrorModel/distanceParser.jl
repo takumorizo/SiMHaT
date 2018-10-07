@@ -2,8 +2,8 @@ Include("config.jl")
 Include("inputFileParser.jl")
 
 module distanceParser
-    using config
-    using inputParser
+    using ..config
+    using ..inputParser
     using ConfParser
     function parseBFHammingDistance(errScorePath::String,
                                     patScorePath::String,
