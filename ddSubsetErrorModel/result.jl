@@ -248,27 +248,31 @@ module result
     using ..__result
     using Plots
     using ..sampler
-    # using JLD
+    using JLD2, FileIO
     using ..config
     using ..inputParser
 
-    # function writeToJLD(sMax, lnProbs, JLDFilePath)
-    #     jldopen(JLDFilePath, "w") do file
-    #         addrequire(file, sampler)
-    #         write(file, "sMax", sMax)
-    #         write(file, "lnProbs", lnProbs)
-    #     end
-    # end
-    #
-    # function readFromJLD(JLDFilePath)
-    #     sMax = jldopen(JLDFilePath, "r") do file
-    #         read(file, "sMax")
-    #     end
-    #     lnProbs = jldopen(JLDFilePath, "r") do file
-    #         read(file, "lnProbs")
-    #     end
-    #     return sMax, lnProbs
-    # end
+    function writeToJLD(sMax, lnProbs, JLDFilePath)
+        # jldopen(JLDFilePath, "w") do file
+        #     addrequire(file, sampler)
+        #     write(file, "sMax", sMax)
+        #     write(file, "lnProbs", lnProbs)
+        # end
+        save(JLDFilePath, "sMax", sMax, "lnProbs", lnProbs)
+    end
+
+    function readFromJLD(JLDFilePath)
+        # sMax = jldopen(JLDFilePath, "r") do file
+        #     read(file, "sMax")
+        # end
+        # lnProbs = jldopen(JLDFilePath, "r") do file
+        #     read(file, "lnProbs")
+        # end
+        # return sMax, lnProbs
+        sMax, lnProbs = load(JLDFilePath, "sMax", "lnProbs")
+        println(typeof(sMax))
+        return sMax, lnProbs
+    end
 
     function viewMAP(sMax, lnProbs, outputDir::String)
         pyplot()
@@ -341,44 +345,50 @@ module result
         viewBlockTypesInHeatMap(sMax.B, sMax.usageS, rbreak, sortR, sMax.usageV, cbreak, sortC, "MAP.B", filePath = outputDir * "/MAP_B.png")
     end
 
-    # function evaluateFvalue(summaryPath::String, scorePath::String, thres::REAL = (REAL)(0.0), rmError::Bool = true)::Tuple{REAL,REAL,REAL}
-    #     if endswith(scorePath, "jld")
-    #         sampled::Sampler{INT, REAL}, lnProbs::Array{REAL, 1} = readFromJLD(scorePath)
-    #         return evaluateFvalueFromSampleAns(summaryPath, sampled, thres, rmError)
-    #     else
-    #         score::Array{REAL, 2}       = inputParser.parseInputSummary(scorePath)
-    #         return evaluateFvalueRaw(summaryPath, score, thres)
-    #     end
-    # end
-    #
-    # function storeFvalue(outputPath::String, prescision::REAL, recall::REAL, fvalue::REAL, tag::String)
-    #     @assert endswith(outputPath, "jld")
-    #     if isfile(outputPath)
-    #         precisions::Dict{String, REAL} = jldopen(outputPath, "r") do file
-    #             read(file, "precisions")
-    #         end
-    #         recalls::Dict{String, REAL} = jldopen(outputPath, "r") do file
-    #             read(file, "recalls")
-    #         end
-    #         fvalues::Dict{String, REAL} = jldopen(outputPath, "r") do file
-    #             read(file, "fvalues")
-    #         end
-    #         precisions[tag] = prescision
-    #         recalls[tag] = recall
-    #         fvalues[tag] = fvalue
-    #     else
-    #         precisions = Dict{String,REAL}(tag=>prescision)
-    #         recalls = Dict{String,REAL}(tag=>recall)
-    #         fvalues = Dict{String,REAL}(tag=>fvalue)
-    #     end
-    #     println(precisions)
-    #     println(recalls)
-    #     println(fvalues)
-    #
-    #     jldopen(outputPath, "w") do file
-    #         write(file, "precisions", precisions)
-    #         write(file, "recalls", recalls)
-    #         write(file, "fvalues", fvalues)
-    #     end
-    # end
+    function evaluateFvalue(summaryPath::String, scorePath::String, thres::REAL = (REAL)(0.0), rmError::Bool = true)::Tuple{REAL,REAL,REAL}
+        if endswith(scorePath, "jld2")
+            sampled::Sampler{INT, REAL}, lnProbs::Array{REAL, 1} = readFromJLD(scorePath)
+            return evaluateFvalueFromSampleAns(summaryPath, sampled, thres, rmError)
+        else
+            score::Array{REAL, 2}       = inputParser.parseInputSummary(scorePath)
+            return evaluateFvalueRaw(summaryPath, score, thres)
+        end
+    end
+
+    function storeFvalue(outputPath::String, prescision::REAL, recall::REAL, fvalue::REAL, tag::String)
+        @assert endswith(outputPath, "jld2")
+        if isfile(outputPath)
+            println(load(outputPath))
+            precisions::Dict{String, REAL} = load(outputPath, "precisions")
+            recalls::Dict{String, REAL}    = load(outputPath, "recalls")
+            fvalues::Dict{String, REAL}    = load(outputPath, "fvalues")
+            precisions[tag] = prescision
+            recalls[tag]    = recall
+            fvalues[tag]    = fvalue
+            # precisions::Dict{String, REAL} = jldopen(outputPath, "r") do file
+            #     read(file, "precisions")
+            # end
+            # recalls::Dict{String, REAL} = jldopen(outputPath, "r") do file
+            #     read(file, "recalls")
+            # end
+            # fvalues::Dict{String, REAL} = jldopen(outputPath, "r") do file
+            #     read(file, "fvalues")
+            # end
+            # precisions[tag] = prescision
+            # recalls[tag] = recall
+            # fvalues[tag] = fvalue
+        else
+            precisions = Dict{String,REAL}(tag=>prescision)
+            recalls   = Dict{String,REAL}(tag=>recall)
+            fvalues   = Dict{String,REAL}(tag=>fvalue)
+        end
+        println(precisions)
+        println(recalls)
+        println(fvalues)
+        jldopen(outputPath, "w") do file
+            file["precisions"] = precisions
+            file["recalls"]    = recalls
+            file["fvalues"]    = fvalues
+        end
+    end
 end
