@@ -50,11 +50,14 @@ module distanceParser
         return distanceMatrix
     end
 
-    function parseDecayFunction(paramFilePath::String)
+    function parseDecayFunction(paramFilePath::String;
+                                distanceTag::String      = "distance",
+                                decayFunctionTag::String = "decayFunction",
+                                decayRateTag::String     = "decayRate")
         conf = ConfParse(paramFilePath)
         parse_conf!(conf)
-        functionType::String = String(retrieve(conf, "distance", "decayFunction"))
-        a::REAL      = parse(REAL, String(retrieve(conf, "distance", "decayRate")))
+        functionType::String = String(retrieve(conf, distanceTag, decayFunctionTag))
+        a::REAL      = parse(REAL, String(retrieve(conf, distanceTag, decayRateTag)))
         if      functionType == "Exponential"
             return x->(REAL)(exp(-1.0 * x / a))
         elseif  functionType == "Sigmoid"

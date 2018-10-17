@@ -40,11 +40,21 @@ module __sampler
         return nothing
     end
 
+    function exp_normalize!(ln_p::AbstractArray{R,1})::Nothing where {R <: Real}
+        ln_p .= (ln_p .- maximum(ln_p))
+        ln_p .= exp.(ln_p)
+        ln_p .= ln_p ./ sum(ln_p)
+        return nothing
+    end
+
     function log_sum_exp(ln_p::Array{R,1})::R where {R <: Real}
         maxVal::R = maximum(ln_p)
         return log(ℯ, sum(exp.( (ln_p .- maxVal) ))) + maxVal
     end
 
+    #= DONE:
+        add: nested ln_P_Link(L1, L2) as another function.
+    =#
     function ln_P_Link(L::TableGraph{I, R})::R where {I <: Integer, R <: Real}
         ans::R = (R)(0.0)
         ln_p = zeros(R, L.V)
@@ -54,6 +64,21 @@ module __sampler
             exp_normalize!(ln_p)
             ln_p .= log.(ℯ, ln_p)
             for to in (I)(1):L.V
+                ans += L.E[to, from] * ln_p[to]
+            end
+        end
+        return ans
+    end
+
+    function ln_P_Link(L::TableGraph{I, R}, usageS::Dict{I,Array{I,1}}, S_s::Array{I, 1} )::R where {I <: Integer, R <: Real}
+        ans::R = (R)(0.0)
+        ln_p = zeros(R, L.V)
+        for from in (I)(1):L.V
+            ln_p .= (R)(0.0)
+            ln_p .= log.(ℯ, L.W[:, from])
+            exp_normalize!(view(ln_p, usageS[S_s[from]]))
+            view(ln_p, usageS[S_s[from]]) .= log.(ℯ, ln_p[usageS[S_s[from]]])
+            for to in usageS[S_s[from]]
                 ans += L.E[to, from] * ln_p[to]
             end
         end
@@ -181,10 +206,15 @@ module __sampler
         return ans
     end
 
+    # DONE: add function argumant of S^(1)_s, usageS^(1), S^(2)_s, usageS^(2)
+    # samp.u[j] == i => samp.u[j] ∈ usageN[S_n[i]
+    # samp.u[j] != i => samp.u[j] ∉ usageN[S_n[i]
     function ln_P_Y(Z::Array{I, 2},
                     H::Array{I, 2},
                     S_s::Array{I, 1},
+                    S_n::Array{I, 1},
                     S_v::Array{I, 1},
+                    usageN::Dict{I, Array{I,1}},
                     B::Dict{Tuple{I,I},I},
                     a::Array{I, 1},
                     f::Array{R, 1},
@@ -217,8 +247,8 @@ module __sampler
                 elseif B[c,m] == 3 # unique
                     ans += (R)(g[j] == 2) * ln_P_ber(H[i,j]-(I)(1), param.p_hap)
                     ans += (R)(g[j] == 1) * ln_P_ber(H[i,j]-(I)(1), (R)(1.0) - param.p_hap)
-                    ans += (R)(u[j] != i) * ln_P_ber(Z[i,j]-(I)(1), param.p_unique)
-                    ans += (R)(u[j] == i) * ln_P_ber(Z[i,j]-(I)(1), f[j])
+                    ans += (R)(i ∉ usageN[S_n[u[j]]]) * ln_P_ber(Z[i,j]-(I)(1), param.p_unique)
+                    ans += (R)(i ∈ usageN[S_n[u[j]]]) * ln_P_ber(Z[i,j]-(I)(1), f[j])
                 elseif B[c,m] == 4 # error
                     ans += ln_P_ber(H[i,j]-(I)(1), (R)(0.50))
                     ans += ln_P_ber(Z[i,j]-(I)(1), f[j])
@@ -349,6 +379,14 @@ module __sampler
         return argmax( random.sampleMultiNomial((I)(1), ln_p) )
     end
 
+    # DONE: modify: D::AbstractArray{R, 2}
+    function sampleLink(D::AbstractArray{R, 2}, i::I) where{I <: Integer, R <: Real}
+        @assert size(D)[1] == size(D)[2]
+        ln_p::Array{R, 1} = log.(ℯ, D[:, i])
+        __sampler.exp_normalize!(ln_p)
+        return argmax( random.sampleMultiNomial((I)(1), ln_p) )
+    end
+
     function rmCluster!(S::Set{I}, usage::Dict{I, Array{I, 1}}, unused::Set{I}, S_s::Array{I, 1})::I where {I <: Integer}
         if length(S) > 0
             i::I = first(S)
@@ -375,6 +413,56 @@ module __sampler
             return k
         else
             return -1
+        end
+    end
+
+    # DONE: add: __sampler.proposeNestedLink(smap.L.W, i, usageS, S_s)::tableGraph{I, R}
+    function proposeNestedLink!(L::TableGraph{I, R},
+                                usageS::Dict{I, Array{I, 1}},
+                                S_s::Array{I, 1}, focus::Set{I})::Nothing where {I <: Integer, R <: Real}
+        for v in focus
+            upCluster = S_s[v]
+            ln_p::Array{R, 1} = log.(ℯ, L.W[usageS[upCluster], v])
+            __sampler.exp_normalize!(ln_p)
+            propose::I = usageS[upCluster][argmax( random.sampleMultiNomial((I)(1), ln_p) )]
+            for to in (I)(1):L.V
+                (to == propose) && (tableGraph.addEdge!(L, v, to))
+                (to != propose) && (tableGraph.rmEdge!(L, v, to))
+            end
+        end
+    end
+
+    # DONE: add: __sampler.setClusterByLink!(L_n, s_n, usageN, unUsedN)
+    function setClusterByLink!(L::TableGraph{I, R},
+                               S_n::Array{I, 1},
+                               usageN::Dict{I, Array{I, 1}},
+                               unUsedN::Set{I})::Nothing where {I <: Integer, R <: Real}
+        N::I = size(S_n)[1]
+        unUsedN = deepcopy(Set{I}())
+        S_n    .= (I)(0)
+        for c in keys(usageN)
+            delete!(usageN, c)
+        end
+        c_now::I = (I)(1)
+        for n in (I)(1):N
+            if S_n[n] == (I)(0)
+                tempSet::Set{I} = Set{I}()
+                tableGraph.DFS!(L, n, tempSet)
+                for nn in tempSet
+                    S_n[nn] = c_now
+                end
+                c_now += (I)(1)
+            end
+        end
+        for n in (I)(1):N
+            if S_n[n] ∈ keys(usageN)
+                push!(usageN[S_n[n]], n)
+            else
+                usageN[S_n[n]] = [n]
+            end
+        end
+        for c in c_now:N
+            push!(unUsedN, c)
         end
     end
 
@@ -405,17 +493,22 @@ module sampler
     using ..distanceParser
     using Random
 
+    # DONE: L, S, usageS ->  L^(1), L^(2), S^(1)_s S^(2)_s, usageS^(1), usageS^(2)
     mutable struct Sampler{I,R}
         Z::Array{I, 2} # Z == 1 err, Z == 2 mutation
         H::Array{I, 2} # H == 1 mat, H == 2 pat
 
-        L::TableGraph{I} # Table Link graph
+        L_s::TableGraph{I} # Table Link graph for sample subset
+        L_n::TableGraph{I} # Table Link graph for each identical sample
 
         S_s::Array{I, 1}
+        S_n::Array{I, 1}
         S_v::Array{I, 1}
         usageS::Dict{I, Array{I, 1}}
+        usageN::Dict{I, Array{I, 1}}
         usageV::Dict{I, Array{I, 1}}
         unUsedS::Set{I}
+        unUsedN::Set{I}
         unUsedV::Set{I}
 
         a::Array{I, 1}  # a == 1 not merged, a == 2 merged
@@ -446,10 +539,43 @@ module sampler
                 __sampler.isErrorValid(samp.B, samp.usageS, samp.usageV, samp.erSet, samp.treeCache, blockType = (I)(1))
     end
 
+    # DONE: L_n, S_n, usageN, unUsedN, valid checker for debug.
+    function assertNestedClusterValidity(samp::Sampler{I, R}, comment::String = "")::Nothing where {I <: Integer, R <: Real}
+        for c in keys(samp.usageN)
+            for i in samp.usageN[c]
+                if samp.S_n[i] != c
+                    println("invalid cluster setting now")
+                    println(comment)
+                    println(samp.L_n)
+                    println(samp.usageN)
+                    println(samp.unUsedN)
+                    println(samp.S_n)
+                    @assert samp.S_n[i] == c
+                end
+            end
+        end
+        for c in samp.unUsedN
+            if c ∈ keys(samp.usageN)
+                println("invalid cluster setting now")
+                println(comment)
+                println(samp.L_n)
+                println(samp.usageN)
+                println(samp.unUsedN)
+                println(samp.S_n)
+                @assert c ∉ keys(samp.usageN)
+            end
+        end
+    end
+
+    #= DONE:
+        add:    ln_P_Link(samp.L^(2), samp.L^(1)) in __sampler and ln_P_all
+        modify: ln_P_Y to model L^(2)
+    =#
     function ln_P_all(samp::Sampler{I,R}, debug::Bool = false)::R where {I<:Integer, R<:Real}
         ans::R = (R)(0.0)
         S::I, M::I = size(samp.Z)
-        ans += __sampler.ln_P_Link(samp.L)
+        ans += __sampler.ln_P_Link(samp.L_s)
+        ans += __sampler.ln_P_Link(samp.L_n, samp.usageS, samp.S_s)
         ans += __sampler.ln_P_beta(samp.p_err, samp.param.γ_e[1], samp.param.γ_e[2])
         ans += __sampler.ln_P_er(samp.er, samp.erSet, samp.p_err)
         ans += __sampler.ln_P_CRP(samp.usageV, samp.param.α_v)
@@ -462,12 +588,12 @@ module sampler
 
 
         ans += __sampler.ln_P_Y(samp.Z, samp.H,
-                                samp.S_s, samp.S_v, samp.B,
+                                samp.S_s, samp.S_n ,samp.S_v, samp.usageN, samp.B,
                                 samp.a, samp.f, samp.g, samp.u, samp.er, samp.param)
 
         ans += __sampler.ln_P_Data_Y(samp.lnPData, samp.Z, samp.H)
         if debug
-            print("__sampler.ln_P_Link(samp.L): ");println(__sampler.ln_P_Link(samp.L))
+            print("__sampler.ln_P_Link(samp.L): ");println(__sampler.ln_P_Link(samp.L_s))
             print("__sampler.ln_P_er(samp.er, samp.erSet, samp.p_err): ");println(__sampler.ln_P_er(samp.er, samp.erSet, samp.p_err))
             print("__sampler.ln_P_CRP(samp.usageV, samp.param.α_v): ");println(__sampler.ln_P_CRP(samp.usageV, samp.param.α_v))
             print("__sampler.ln_P_B(samp.B, samp.usageS, samp.usageV, samp.param.δ_s): ");println(__sampler.ln_P_B(samp.B, samp.usageS, samp.usageV, samp.param.δ_s))
@@ -481,14 +607,25 @@ module sampler
         return ans
     end
 
-    function sampleZ!(samp::Sampler{I, R})::Nothing where {I<:Integer, R <: Real}
+    #= DONE:
+        samp.u[j] == i => samp.u[j] ∈ usageN[S_n[i]]
+        samp.u[j] != i => samp.u[j] ∉ usageN[S_n[i]]
+      TODO: refactoring all sampler funciton to return ratio of ln_P_next / ln_P_prev
+    =#
+    function sampleZ!(samp::Sampler{I, R}, debug::Bool = false)::Nothing where {I<:Integer, R <: Real}
         S::I, M::I = size(samp.Z)
         t::I = (I)(0)
         ln_p::Array{R,1} = [0.0, 0.0]
         ln_f::Array{R,1} = [0.0, 0.0]
         now_Z::I = (I)(0)
+
+        (debug) && (debug = debug && (R == Float64))
+        (debug) && (ln_P_prev_true::R = (R)(0.0); ln_P_next_true::R = (R)(0.0); ln_P_prev::R = (R)(0.0); ln_P_next::R = (R)(0.0);
+                    ln_P_ratio_true::R = (R)(0.0); ln_P_ratio::R = (R)(0.0); eps::R =(R)(0.0))
+        (debug) && ( if (R==Float64); eps = (R)(1e-2); end;)
         for j in (I)(1):M
             for i in (I)(1):S
+                (debug) && (ln_P_prev_true = ln_P_all(samp))
                 now_Z = samp.Z[i,j]
                 t = 1 + samp.H[i,j]
                 ln_p[1] = samp.lnPData[i,j,1]; ln_p[2] = samp.lnPData[i,j,t];
@@ -500,8 +637,10 @@ module sampler
                     ln_p[1] += (samp.a[i] == 2) * ln_f[1] + (samp.a[i] == 1) * (R)(log(ℯ, 1.0-samp.param.p_back))
                     ln_p[2] += (samp.a[i] == 2) * ln_f[2] + (samp.a[i] == 1) * (R)(log(ℯ, samp.param.p_back))
                 elseif samp.er[j] == 1 && samp.B[(samp.S_s[i], samp.S_v[j])] == 3
-                    ln_p[1] += (samp.u[j] == i) * ln_f[1] + (samp.u[j] != i) * (R)(log(ℯ, 1.0-samp.param.p_unique))
-                    ln_p[2] += (samp.u[j] == i) * ln_f[2] + (samp.u[j] != i) * (R)(log(ℯ, samp.param.p_unique))
+                    isIn::Bool    = (i ∈ samp.usageN[samp.S_n[samp.u[j]]])
+                    isNotIn::Bool = (i ∉ samp.usageN[samp.S_n[samp.u[j]]])
+                    ln_p[1] += (isIn) * ln_f[1] + (isNotIn) * (R)(log(ℯ, 1.0-samp.param.p_unique))
+                    ln_p[2] += (isIn) * ln_f[2] + (isNotIn) * (R)(log(ℯ, samp.param.p_unique))
                 elseif samp.er[j] == 2
                     ln_p[1] += ln_f[1]
                     ln_p[2] += ln_f[2]
@@ -516,18 +655,36 @@ module sampler
                 if samp.er[j] == 2
                     buffPhyloMatrix.edit!(samp.treeCache, i, j, samp.Z[i,j]-(I)(1))
                 end
+                (debug) && (ln_P_next_true = ln_P_all(samp))
+                (debug) && (ln_P_prev = log(ℯ, ln_p[now_Z]))
+                (debug) && (ln_P_next = log(ℯ, ln_p[samp.Z[i,j]]))
+                (debug) && (ln_P_ratio_true = ln_P_next_true - ln_P_prev_true;
+                            ln_P_ratio      = ln_P_next      - ln_P_prev;)
+                (debug) && ( if abs(ln_P_ratio_true) > 1e-5 && abs((ln_P_ratio_true - ln_P_ratio)/ln_P_ratio) > eps;
+                                println((ln_P_ratio_true, ln_P_ratio));
+                                println((ln_P_next_true, ln_P_next));
+                                println((ln_P_prev_true, ln_P_prev));
+                                @assert abs((ln_P_ratio_true - ln_P_ratio)/ln_P_ratio) <= eps;
+                            end;
+                )
             end
         end
         return nothing
     end
 
-    function sampleH!(samp::Sampler{I, R})::Nothing where {I<:Integer, R <: Real}
+    function sampleH!(samp::Sampler{I, R}, debug::Bool = false)::Nothing where {I<:Integer, R <: Real}
         S::I, M::I = size(samp.Z)
         ln_p::Array{R, 1}   = [0.0, 0.0]
         ln_P_hap::Array{R, 1} = log.(ℯ, [ 1.0 - samp.param.p_hap, samp.param.p_hap ])
         ln_P_rn::Array{R, 1}  = convert.(R, log.(ℯ, [0.50, 0.50])) #convert.(R, log.(ℯ, [0.50, 0.50]))
+        (debug) && (debug = debug && (R == Float64))
+        (debug) && (ln_P_prev_true::R = (R)(0.0); ln_P_next_true::R = (R)(0.0); ln_P_prev::R = (R)(0.0); ln_P_next::R = (R)(0.0);
+                    ln_P_ratio_true::R = (R)(0.0); ln_P_ratio::R = (R)(0.0); eps::R = (R)(0.0);)
+        (debug) && ( if (R==Float64); eps = (R)(1e-2); end;)
         for j in (I)(1):M
             for i in (I)(1):S
+                (debug) && (ln_P_prev_true = ln_P_all(samp))
+                (debug) && (now_H::I = samp.H[i,j])
                 ln_p[1] = (samp.Z[i,j] == 2) * samp.lnPData[i,j, 1+1]
                 ln_p[2] = (samp.Z[i,j] == 2) * samp.lnPData[i,j, 1+2]
                 if     samp.er[j] == 1
@@ -539,18 +696,37 @@ module sampler
                 end
                 __sampler.exp_normalize!(ln_p)
                 samp.H[i,j] = argmax( random.sampleMultiNomial((I)(1), ln_p) )
+
+                (debug) && (ln_P_next_true = ln_P_all(samp))
+                (debug) && (ln_P_prev = log(ℯ, ln_p[now_H]))
+                (debug) && (ln_P_next = log(ℯ, ln_p[samp.H[i,j]]))
+                (debug) && (ln_P_ratio_true = ln_P_next_true - ln_P_prev_true;
+                            ln_P_ratio      = ln_P_next      - ln_P_prev;)
+                (debug) && ( if abs(ln_P_ratio_true) > 1e-5 && abs((ln_P_ratio_true - ln_P_ratio)/ln_P_ratio) > eps;
+                                println((ln_P_ratio_true, ln_P_ratio));
+                                println((ln_P_next_true, ln_P_next));
+                                println((ln_P_prev_true, ln_P_prev));
+                                @assert abs((ln_P_ratio_true - ln_P_ratio)/ln_P_ratio) <= eps;
+                            end;
+                )
             end
         end
         return nothing
     end
 
-    function sampleA!(samp::Sampler{I, R})::Nothing where {I <: Integer, R <: Real}
+    function sampleA!(samp::Sampler{I, R}, debug::Bool = false)::Nothing where {I <: Integer, R <: Real}
         ln_p::Array{R, 1}   = convert.(R, [0.0, 0.0])
         ln_p_merge::Array{R, 1} = convert.(R, log.(ℯ, [1.0 - samp.param.p_merge, samp.param.p_merge] ))
         ln_p_back::Array{R, 1}  = convert.(R, log.(ℯ, [1.0 - samp.param.p_back, samp.param.p_back] ))
         S::I, M::I = size(samp.Z)
         c::I = (I)(0)
+        (debug) && (debug = debug && (R == Float64))
+        (debug) && (ln_P_prev_true::R = (R)(0.0); ln_P_next_true::R = (R)(0.0); ln_P_prev::R = (R)(0.0); ln_P_next::R = (R)(0.0);
+                    ln_P_ratio_true::R = (R)(0.0); ln_P_ratio::R = (R)(0.0); eps::R = (R)(0.0);)
+        (debug) && ( if (R==Float64); eps = (R)(1e-2); end;)
         for i in (I)(1):S
+            (debug) && (ln_P_prev_true = ln_P_all(samp))
+            (debug) && (now_A::I = samp.a[i])
             ln_p .= ln_p_merge
             c = samp.S_s[i]
             for m in keys(samp.usageV)
@@ -565,16 +741,39 @@ module sampler
             end
             __sampler.exp_normalize!(ln_p)
             samp.a[i] = argmax( random.sampleMultiNomial((I)(1), ln_p) )
+            (debug) && (ln_P_next_true = ln_P_all(samp))
+            (debug) && (ln_P_prev = log(ℯ, ln_p[now_A]))
+            (debug) && (ln_P_next = log(ℯ, ln_p[samp.a[i]]))
+            (debug) && (ln_P_ratio_true = ln_P_next_true - ln_P_prev_true;
+                        ln_P_ratio      = ln_P_next      - ln_P_prev;)
+            (debug) && ( if abs(ln_P_ratio_true) > 1e-5 && abs((ln_P_ratio_true - ln_P_ratio)/ln_P_ratio) > eps;
+                            println((ln_P_ratio_true, ln_P_ratio));
+                            println((ln_P_next_true, ln_P_next));
+                            println((ln_P_prev_true, ln_P_prev));
+                            @assert abs((ln_P_ratio_true - ln_P_ratio)/ln_P_ratio) <= eps;
+                        end;
+            )
         end
         return nothing
     end
 
-    function sampleF!(samp::Sampler{I, R})::Nothing where {I <: Integer, R <: Real}
+    #= DONE:
+        samp.u[j] == i => samp.u[j] ∈ usageN[S_n[i]]
+       # TODO: refactoring all sampler funciton to return ratio of ln_P_next / ln_P_prev
+    =#
+    function sampleF!(samp::Sampler{I, R}, debug::Bool = false)::Nothing where {I <: Integer, R <: Real}
         m::I = (I)(0)
         λ::Array{R ,1} = [0.0, 0.0]
         S::I, M::I = size(samp.Z)
+        (debug) && (debug = debug && (R == Float64))
+        (debug) && (ln_P_prev_true::R = (R)(0.0); ln_P_next_true::R = (R)(0.0); ln_P_prev::R = (R)(0.0); ln_P_next::R = (R)(0.0);
+                    ln_P_ratio_true::R = (R)(0.0); ln_P_ratio::R = (R)(0.0); eps::R = (R)(0.0);)
+        (debug) && ( if (R==Float64); eps = (R)(1e-2); end;)
 
         for j in (I)(1):M
+            (debug) && (ln_P_prev_true = ln_P_all(samp))
+            (debug) && (now_F::R = samp.f[j])
+
             m = samp.S_v[j]
             λ[1] = (samp.er[j] == 1) * samp.param.λ_s[1, 1] + (samp.er[j] == 2) * samp.param.λ_s[2, 1]
             λ[2] = (samp.er[j] == 1) * samp.param.λ_s[1, 2] + (samp.er[j] == 2) * samp.param.λ_s[2, 2]
@@ -582,22 +781,42 @@ module sampler
                 for i in samp.usageS[c]
                     isAdd::Bool = (samp.B[c,m] == 1 || samp.B[c,m] == 4) ||
                                   (samp.B[c,m] == 2 && samp.a[i] == 2)   ||
-                                  (samp.B[c,m] == 3 && samp.u[j] == i)
+                                  (samp.B[c,m] == 3 && (i ∈ samp.usageN[samp.S_n[samp.u[j]]]) )
                     λ[1] += (R)(isAdd) * (samp.Z[i,j] == 2)
                     λ[2] += (R)(isAdd) * (samp.Z[i,j] == 1)
                 end
             end
             samp.f[j] = random.sampleBeta(λ[1], λ[2])
+
+            (debug) && (ln_P_next_true = ln_P_all(samp))
+            (debug) && (ln_P_prev = __sampler.ln_P_beta(now_F, λ[1], λ[2]))
+            (debug) && (ln_P_next = __sampler.ln_P_beta(samp.f[j], λ[1], λ[2]))
+            (debug) && (ln_P_ratio_true = ln_P_next_true - ln_P_prev_true;
+                        ln_P_ratio      = ln_P_next      - ln_P_prev;)
+            (debug) && ( if abs(ln_P_ratio_true) > 1e-5 && abs((ln_P_ratio_true - ln_P_ratio)/ln_P_ratio) > eps;
+                            println((ln_P_ratio_true, ln_P_ratio));
+                            println((ln_P_next_true, ln_P_next));
+                            println((ln_P_prev_true, ln_P_prev));
+                            @assert abs((ln_P_ratio_true - ln_P_ratio)/ln_P_ratio) <= eps;
+                        end;
+            )
         end
         return nothing
     end
 
-    function sampleG!(samp::Sampler{I, R})::Nothing where {I <: Integer, R <: Real}
+    function sampleG!(samp::Sampler{I, R}, debug::Bool = false)::Nothing where {I <: Integer, R <: Real}
         S::I, M::I = size(samp.Z)
         m::I = (I)(0)
         ln_p::Array{R, 1} = convert.(R,log.(ℯ, [0.5, 0.5]))
         ln_P_hap::Array{R, 1} = log.(ℯ, [ 1.0 - samp.param.p_hap, samp.param.p_hap ])
+        (debug) && (debug = debug && (R == Float64))
+        (debug) && (ln_P_prev_true::R = (R)(0.0); ln_P_next_true::R = (R)(0.0); ln_P_prev::R = (R)(0.0); ln_P_next::R = (R)(0.0);
+                    ln_P_ratio_true::R = (R)(0.0); ln_P_ratio::R = (R)(0.0); eps::R = (R)(0.0);)
+        (debug) && ( if (R==Float64); eps = (R)(1e-2); end;)
         for j in (I)(1):M
+            (debug) && (ln_P_prev_true = ln_P_all(samp))
+            (debug) && (now_G::I = samp.g[j])
+
             m = samp.S_v[j]
             ln_p .= samp.param.β_s
             for c in keys(samp.usageS)
@@ -611,29 +830,65 @@ module sampler
             # ln_p_temp::Array{R, 1} = deepcopy(ln_p)
             __sampler.exp_normalize!(ln_p)
             samp.g[j] = argmax( random.sampleMultiNomial((I)(1), ln_p) )
+
+            (debug) && (ln_P_next_true = ln_P_all(samp))
+            (debug) && (ln_P_prev = log(ℯ, ln_p[now_G]))
+            (debug) && (ln_P_next = log(ℯ, ln_p[samp.g[j]]))
+            (debug) && (ln_P_ratio_true = ln_P_next_true - ln_P_prev_true;
+                        ln_P_ratio      = ln_P_next      - ln_P_prev;)
+            (debug) && ( if abs(ln_P_ratio_true) > 1e-5 && abs((ln_P_ratio_true - ln_P_ratio)/ln_P_ratio) > eps;
+                            println((ln_P_ratio_true, ln_P_ratio));
+                            println((ln_P_next_true, ln_P_next));
+                            println((ln_P_prev_true, ln_P_prev));
+                            @assert abs((ln_P_ratio_true - ln_P_ratio)/ln_P_ratio) <= eps;
+                        end;
+            )
         end
         return nothing
     end
 
-    function sampleU!(samp::Sampler{I, R})::Nothing where {I <: Integer, R <: Real}
+    #=
+    # TODO: refactoring all sampler funciton to return ratio of ln_P_next / ln_P_prev
+    DONE: write a code like this.
+    ln_p_cons = 0.0
+    for c in filter(c->(samp.B[c,m] == 3), keys(samp.usageS))
+        for u in usageS[c]
+            for i in usageN[S_n[u]]
+                consAt::R = (samp.Z[i,j] == 2) * ln_p_unique[2] + (samp.Z[i,j] == 1) * ln_p_unique[1]
+                prosAt::R = (samp.Z[i,j] == 2) * ln_p_f[2]      + (samp.Z[i,j] == 1) * ln_p_f[1]
+                ln_p[u] += (prosAt-consAt)
+                ln_p_cons += consAt
+            end
+        end
+    end
+    ln_p .+= ln_p_cons
+    =#
+    function sampleU!(samp::Sampler{I, R}, debug::Bool = false)::Nothing where {I <: Integer, R <: Real}
         S::I, M::I = size(samp.Z)
         m::I = (I)(0)
         ln_p::Array{R, 1} = zeros(R, S)
         ln_p_unique::Array{R, 1} = convert.(R, log.(ℯ, [1.0 - samp.param.p_unique, samp.param.p_unique]) )
         ln_p_f::Array{R, 1} = [0.0, 0.0]
 
+        (debug) && (debug = debug && (R == Float64))
+        (debug) && (ln_P_prev_true::R = (R)(0.0); ln_P_next_true::R = (R)(0.0); ln_P_prev::R = (R)(0.0); ln_P_next::R = (R)(0.0);
+                    ln_P_ratio_true::R = (R)(0.0); ln_P_ratio::R = (R)(0.0); eps::R = (R)(0.0);)
+        (debug) && ( if (R==Float64); eps = (R)(1e-2); end;)
         for j in (I)(1):M
+            (debug) && (ln_P_prev_true = ln_P_all(samp))
+            (debug) && (now_U::I = samp.u[j])
+
             m = samp.S_v[j]
             ln_p .= (R)(0.0)
             ln_p_f[1] = log(ℯ, 1.0 - samp.f[j]); ln_p_f[2] = log(ℯ, samp.f[j]);
 
-            ln_p_cons::R = (R)(0.0)
-            for c in keys(samp.usageS)
-                if samp.B[c,m] == 3
-                    for i in samp.usageS[c]
+            ln_p_cons = (R)(0.0)
+            for c in filter(c->(samp.B[c,m] == 3), keys(samp.usageS))
+                for u in samp.usageS[c]
+                    for i in samp.usageN[samp.S_n[u]]
                         consAt::R = (samp.Z[i,j] == 2) * ln_p_unique[2] + (samp.Z[i,j] == 1) * ln_p_unique[1]
                         prosAt::R = (samp.Z[i,j] == 2) * ln_p_f[2]      + (samp.Z[i,j] == 1) * ln_p_f[1]
-                        ln_p[i] += (-consAt + prosAt);
+                        ln_p[u] += (prosAt-consAt)
                         ln_p_cons += consAt
                     end
                 end
@@ -643,6 +898,19 @@ module sampler
             # ln_p_temp::Array{R, 1} = deepcopy(ln_p)
             __sampler.exp_normalize!(ln_p)
             samp.u[j] = argmax( random.sampleMultiNomial((I)(1), ln_p) )
+
+            (debug) && (ln_P_next_true = ln_P_all(samp))
+            (debug) && (ln_P_prev = log(ℯ, ln_p[now_U]))
+            (debug) && (ln_P_next = log(ℯ, ln_p[samp.u[j]]))
+            (debug) && (ln_P_ratio_true = ln_P_next_true - ln_P_prev_true;
+                        ln_P_ratio      = ln_P_next      - ln_P_prev;)
+            (debug) && ( if abs(ln_P_ratio_true) > 1e-5 && abs((ln_P_ratio_true - ln_P_ratio)/ln_P_ratio) > eps;
+                            println((ln_P_ratio_true, ln_P_ratio));
+                            println((ln_P_next_true, ln_P_next));
+                            println((ln_P_prev_true, ln_P_prev));
+                            @assert abs((ln_P_ratio_true - ln_P_ratio)/ln_P_ratio) <= eps;
+                        end;
+            )
         end
         return nothing
     end
@@ -699,18 +967,50 @@ module sampler
         return nothing
     end
 
-    function sampleP_err!(samp::Sampler{I, R})::Nothing where {I <: Integer, R <: Real}
+    function sampleP_err!(samp::Sampler{I, R}, debug::Bool = false)::Nothing where {I <: Integer, R <: Real}
         # prev_p_err::R = samp.p_err      # debug
         # prev_p_all::R = ln_P_all(samp)  # debug
+        (debug) && (debug = debug && (R == Float64))
+        (debug) && (ln_P_prev_true::R = (R)(0.0); ln_P_next_true::R = (R)(0.0); ln_P_prev::R = (R)(0.0); ln_P_next::R = (R)(0.0);
+                    ln_P_ratio_true::R = (R)(0.0); ln_P_ratio::R = (R)(0.0); eps::R = (R)(0.0);)
+        (debug) && ( if (R==Float64); eps = (R)(1e-2); end;)
+        (debug) && (ln_P_prev_true = ln_P_all(samp))
+        (debug) && (now_P::R = samp.p_err)
+
         γ_e = [0.0, 0.0]
         γ_e .= samp.param.γ_e
         γ_e[1] += (R)(length(samp.erSet))
         γ_e[2] += (R)(length(samp.er) - length(samp.erSet))
         samp.p_err = random.sampleBeta(γ_e[1], γ_e[2])
+
+        (debug) && (ln_P_next_true = ln_P_all(samp))
+        (debug) && (ln_P_prev = __sampler.ln_P_beta(now_P, γ_e[1], γ_e[2]))
+        (debug) && (ln_P_next = __sampler.ln_P_beta(samp.p_err, γ_e[1], γ_e[2]))
+        (debug) && (ln_P_ratio_true = ln_P_next_true - ln_P_prev_true;
+                    ln_P_ratio      = ln_P_next      - ln_P_prev;)
+        (debug) && ( if abs(ln_P_ratio_true) > 1e-5 && abs((ln_P_ratio_true - ln_P_ratio)/ln_P_ratio) > eps;
+                        println((ln_P_ratio_true, ln_P_ratio));
+                        println((ln_P_next_true, ln_P_next));
+                        println((ln_P_prev_true, ln_P_prev));
+                        @assert abs((ln_P_ratio_true - ln_P_ratio)/ln_P_ratio) <= eps;
+                    end;
+        )
         return nothing
     end
 
-    function sampleS_v!(samp::Sampler{I, R}, j::I)::Nothing where {I <: Integer, R <: Real}
+    # TODO: refactoring all sampler funciton to return ratio of ln_P_next / ln_P_prev
+    # DONE: change argment of ln_P_Y, ln_P_V, and S_s -> S^(1)_s
+    function sampleS_v!(samp::Sampler{I, R}, j::I, debug::Bool = false)::Nothing where {I <: Integer, R <: Real}
+        (debug) && (debug = debug && (R == Float64))
+        (debug) && (ln_P_prev_true::R = (R)(0.0); ln_P_next_true::R = (R)(0.0); ln_q_prev::R = (R)(0.0); ln_q_next::R = (R)(0.0);
+                    ln_P_ratio_true::R = (R)(0.0); ln_P_ratio::R = (R)(0.0); eps::R = (R)(0.0);)
+        (debug) && ( if (R==Float64); eps = (R)(1e-2); end;)
+        (debug) && (ln_P_prev_true = ln_P_all(samp))
+        (debug) && (ln_q_prev += __sampler.ln_P_er(samp.er, samp.erSet, samp.p_err) )
+        (debug) && (ln_q_prev += __sampler.ln_P_CRP(samp.usageV, samp.param.α_v) )
+        (debug) && (ln_q_prev += __sampler.ln_P_B(samp.B, samp.usageS, samp.usageV, samp.param.δ_s) )
+        (debug) && (ln_q_prev += __sampler.ln_P_f(samp.f, samp.param.λ_s, samp.er) )
+
         prevCluster::I = samp.S_v[j]
         prevEr::I = samp.er[j]
         prevF::R  = samp.f[j]
@@ -746,7 +1046,7 @@ module sampler
         (
             accPrev += __sampler.ln_P_V(samp.Z, samp.usageS, samp.usageV, samp.B, samp.erSet,
                                         samp.treeCache, samp.param.ln_p_v);
-            accPrev += __sampler.ln_P_Y(samp.Z, samp.H, samp.S_s, samp.S_v, samp.B, samp.a, samp.f,
+            accPrev += __sampler.ln_P_Y(samp.Z, samp.H, samp.S_s, samp.S_n, samp.S_v, samp.usageN, samp.B, samp.a, samp.f,
                                         samp.g, samp.u, samp.er, samp.param, rangeV = j:j);
         )
         accNext::R = (R)(0.0) # update prev to next state
@@ -759,8 +1059,24 @@ module sampler
             buffPhyloMatrix.update!(samp.treeCache, samp.B, samp.usageS, samp.usageV);
             accNext += __sampler.ln_P_V(samp.Z, samp.usageS, samp.usageV, samp.B, samp.erSet,
                                         samp.treeCache, samp.param.ln_p_v);
-            accNext += __sampler.ln_P_Y(samp.Z, samp.H, samp.S_s, samp.S_v, samp.B, samp.a, samp.f,
+            accNext += __sampler.ln_P_Y(samp.Z, samp.H, samp.S_s, samp.S_n, samp.S_v, samp.usageN, samp.B, samp.a, samp.f,
                                         samp.g, samp.u, samp.er, samp.param, rangeV = j:j);
+        )
+        (debug) && (ln_P_next_true = ln_P_all(samp))
+        (debug) && (ln_q_next += __sampler.ln_P_er(samp.er, samp.erSet, samp.p_err) )
+        (debug) && (ln_q_next += __sampler.ln_P_CRP(samp.usageV, samp.param.α_v) )
+        (debug) && (ln_q_next += __sampler.ln_P_B(samp.B, samp.usageS, samp.usageV, samp.param.δ_s) )
+        (debug) && (ln_q_next += __sampler.ln_P_f(samp.f, samp.param.λ_s, samp.er) )
+
+        (debug) && (ln_P_ratio_true = ln_P_next_true - ln_P_prev_true;
+                    ln_P_ratio      = accNext - accPrev - ln_q_prev + ln_q_next;)
+        (debug) && ( if abs(ln_P_ratio_true) > 1e-5 && abs((ln_P_ratio_true - ln_P_ratio)/ln_P_ratio) > eps;
+                        println(j);
+                        println((ln_P_ratio_true, ln_P_ratio));
+                        println((ln_P_next_true, ln_q_next, accNext));
+                        println((ln_P_prev_true, ln_q_prev, accPrev));
+                        @assert abs((ln_P_ratio_true - ln_P_ratio)/ln_P_ratio) <= eps;
+                    end;
         )
         # select prev/next
         accRate::R = min((R)(1.0), exp(accNext - accPrev))
@@ -775,6 +1091,10 @@ module sampler
         return nothing
     end
 
+    # DONE: Check again whether your M-H algorithm update is correct.
+    #=
+    DONE: ln_P_Y: add argument
+    =#
     function ln_P_Y_marginal!(samp::Sampler{I, R}, c::I)::R where {I <: Integer, R <: Real}
         ans::R = (R)(0.0)
         ln_p::Array{R, 1} = [0.0, 0.0, 0.0]
@@ -787,7 +1107,7 @@ module sampler
             for b in (I)(1):(I)(3)
                 ln_p[b] += log(ℯ, samp.param.δ_s[b])
                 samp.B[c,m] = b
-                ln_p[b] += __sampler.ln_P_Y(samp.Z, samp.H, samp.S_s, samp.S_v, samp.B, samp.a, samp.f,
+                ln_p[b] += __sampler.ln_P_Y(samp.Z, samp.H, samp.S_s, samp.S_n, samp.S_v, samp.usageN, samp.B, samp.a, samp.f,
                                             samp.g, samp.u, samp.er, samp.param,
                                             rangeS = samp.usageS[c], rangeV = samp.usageV[m])
             end
@@ -797,13 +1117,40 @@ module sampler
         return ans
     end
 
+    function ln_P_B_Y!(samp::Sampler{I, R})::R where {I <: Integer, R <: Real}
+        ans::R = (R)(0.0)
+        ln_p::Array{R, 1} = convert.(R, [0.0, 0.0, 0.0])
+        for c in keys(samp.usageS)
+            for m in keys(samp.usageV)
+                now_B::I = samp.B[c, m]
+                if (samp.B[c, m] == 4)
+                    continue
+                end
+                ln_p .= (R)(0.0)
+                for t in (I)(1):(I)(3)
+                    samp.B[c, m] = t
+                    ln_p[t] += log(ℯ, samp.param.δ_s[t])
+                    ln_p[t] += __sampler.ln_P_Y(samp.Z, samp.H, samp.S_s, samp.S_n, samp.S_v, samp.usageN, samp.B, samp.a, samp.f,
+                                                samp.g, samp.u, samp.er, samp.param,
+                                                rangeS = samp.usageS[c], rangeV = samp.usageV[m])
+                end
+                samp.B[c, m] = now_B
+                __sampler.exp_normalize!(ln_p)
+                ans += log(ℯ, ln_p[now_B])
+            end
+        end
+        return ans
+    end
+
+    # DONE: samp.usageS -> samp.usageS^(1), samp.S_s -> samp.S^(1)_s
+    # DONE: add argument to ln_P_Y
     function sampleBPatiallyGibbs!(samp::Sampler{I,R}, c::I, m::I)::Nothing where {I <: Integer, R <: Real }
         (samp.B[c, m] == 4) && (return nothing)
         ln_p::Array{R, 1} = convert.(R, [0.0, 0.0, 0.0])
         for t in (I)(1):(I)(3)
             samp.B[c, m] = t
             ln_p[t] += log(ℯ, samp.param.δ_s[t])
-            ln_p[t] += __sampler.ln_P_Y(samp.Z, samp.H, samp.S_s, samp.S_v, samp.B, samp.a, samp.f,
+            ln_p[t] += __sampler.ln_P_Y(samp.Z, samp.H, samp.S_s, samp.S_n, samp.S_v, samp.usageN, samp.B, samp.a, samp.f,
                                         samp.g, samp.u, samp.er, samp.param,
                                         rangeS = samp.usageS[c], rangeV = samp.usageV[m])
         end
@@ -814,34 +1161,52 @@ module sampler
         return nothing
     end
 
-    function sampleL!(samp::Sampler{I, R}, i::I, correct::Bool = true)::Nothing where {I <: Integer, R <: Real}
-        prev_to::I = tableGraph.getLink(samp.L, i)
-        next_to::I = __sampler.sampleLink(samp.L.W, i)
+    #=
+    DONE: add proposing L_n part
+        add: __sampler.proposeNestedLink(smap.L.W, i, usageS, S_s)::tableGraph{I, R}
+        add: __sampler.setClusterByLink(L_n, s_n, usageN, unUsedN)
+        modify: update L_n state
+    # TODO: refactoring all sampler funciton to return ratio of ln_P_next / ln_P_prev
+    =#
+    function sampleL!(samp::Sampler{I, R}, i::I, debug::Bool = false)::Nothing where {I <: Integer, R <: Real}
+        (debug) && (debug = debug && (R == Float64))
+        (debug) && (ln_P_prev_true::R = (R)(0.0); ln_P_next_true::R = (R)(0.0); ln_q_prev::R = (R)(0.0); ln_q_next::R = (R)(0.0);
+                    ln_P_ratio_true::R = (R)(0.0); ln_P_ratio::R = (R)(0.0); eps::R = (R)(0.0);)
+        (debug) && ( if (R==Float64); eps = (R)(1e-2); end;)
+        (debug) && (ln_P_prev_true = ln_P_all(samp))
+        (debug) && (ln_q_prev += __sampler.ln_P_Link(samp.L_s) )
+        (debug) && (ln_q_prev += __sampler.ln_P_Link(samp.L_n, samp.usageS, samp.S_s) )
+        (debug) && (ln_q_prev += ln_P_B_Y!(samp) )
+
+        prev_to::I = tableGraph.getLink(samp.L_s, i)
+        next_to::I = __sampler.sampleLink(samp.L_s.W, i)
         S_pp::Set{I} = Set{I}([])
         S_pn::Set{I} = Set{I}([])
         S_np::Set{I} = Set{I}([])
         S_nn::Set{I} = Set{I}([])
-        tableGraph.diffGroup!(samp.L, S_pp, S_pn, S_np, S_nn, i, prev_to, next_to, both = true)
+        tableGraph.diffGroup!(samp.L_s, S_pp, S_pn, S_np, S_nn, i, prev_to, next_to, both = true)
+        prev_L_n::TableGraph{I, R} = deepcopy(samp.L_n)
 
         prevUsageS::Dict{I, Array{I, 1}} = deepcopy(samp.usageS)
         prevUnUsedS::Set{I}              = deepcopy(samp.unUsedS)
         prevS_s::Array{I}                = deepcopy(samp.S_s)
+        prevUsageN::Dict{I, Array{I, 1}} = deepcopy(samp.usageN)
+        prevUnUsedN::Set{I}              = deepcopy(samp.unUsedN)
+        prevS_n::Array{I}                = deepcopy(samp.S_n)
         prevBs::Dict{Tuple{I,I}, I}      = deepcopy(samp.B)
         accPrev::R = (R)(0.0)
         (
-            if correct;
-                accPrev += ln_P_Y_marginal!(samp, samp.S_s[prev_to]);
-                if samp.S_s[prev_to] != samp.S_s[next_to];
-                    accPrev += ln_P_Y_marginal!(samp, samp.S_s[next_to]);
-                end
-                accPrev += __sampler.ln_P_V(samp.Z, samp.usageS, samp.usageV, samp.B, samp.erSet,
-                                            samp.treeCache, samp.param.ln_p_v);
+            accPrev += ln_P_Y_marginal!(samp, samp.S_s[prev_to]);
+            if samp.S_s[prev_to] != samp.S_s[next_to];
+                accPrev += ln_P_Y_marginal!(samp, samp.S_s[next_to]);
             end;
+            accPrev += __sampler.ln_P_V(samp.Z, samp.usageS, samp.usageV, samp.B, samp.erSet,
+                                        samp.treeCache, samp.param.ln_p_v);
         )
         accNext::R = (R)(0.0)
         (# update to proposal state
-            tableGraph.rmEdge!(samp.L, i, prev_to);
-            tableGraph.addEdge!(samp.L, i, next_to);
+            tableGraph.rmEdge!(samp.L_s, i, prev_to);
+            tableGraph.addEdge!(samp.L_s, i, next_to);
             (removed::Array{I, 1}, added::Array{I, 1}) = __sampler.updateSsByGroupDiff!(S_pp, S_pn, S_np, S_nn,
                                                                                         samp.usageS, samp.unUsedS, samp.S_s);
             errM::Set{I} = Set{I}([]);
@@ -853,26 +1218,58 @@ module sampler
                 samp.B[c,m] = 1;
                 (m ∈ errM) && (samp.B[c,m] = 4);
             end; end;
+            __sampler.proposeNestedLink!(samp.L_n, samp.usageS, samp.S_s, Set{I}([prev_to, next_to]));
+            __sampler.setClusterByLink!(samp.L_n, samp.S_n, samp.usageN, samp.unUsedN);
             for c in added; for m in keys(samp.usageV);
                 sampleBPatiallyGibbs!(samp, c, m);
             end; end;
-            if correct;
-                accNext += ln_P_Y_marginal!(samp, samp.S_s[prev_to]);
-                if samp.S_s[prev_to] != samp.S_s[next_to];
-                    accNext += ln_P_Y_marginal!(samp, samp.S_s[next_to]);
-                end;
-                accNext += __sampler.ln_P_V(samp.Z, samp.usageS, samp.usageV, samp.B, samp.erSet,
-                                            samp.treeCache, samp.param.ln_p_v);
+            accNext += ln_P_Y_marginal!(samp, samp.S_s[prev_to]);
+            if samp.S_s[prev_to] != samp.S_s[next_to];
+                accNext += ln_P_Y_marginal!(samp, samp.S_s[next_to]);
             end;
+            accNext += __sampler.ln_P_V(samp.Z, samp.usageS, samp.usageV, samp.B, samp.erSet,
+                                        samp.treeCache, samp.param.ln_p_v);
         )
         # select prev/next
         accRate::R = min((R)(1.0), exp(accNext - accPrev))
 
-        if !correct
-            return nothing
-        elseif rand() > accRate # rejected
-            tableGraph.rmEdge!(samp.L, i, next_to)
-            tableGraph.addEdge!(samp.L, i, prev_to)
+        (debug) && (ln_P_next_true = ln_P_all(samp))
+        (debug) && (ln_q_next += __sampler.ln_P_Link(samp.L_s) )
+        (debug) && (ln_q_next += __sampler.ln_P_Link(samp.L_n, samp.usageS, samp.S_s) )
+        (debug) && (ln_q_next += ln_P_B_Y!(samp) )
+        (debug) && (ln_P_ratio_true = ln_P_next_true - ln_P_prev_true;
+                    ln_P_ratio      = accNext - accPrev - ln_q_prev + ln_q_next;)
+
+        # (debug) && (println("==== ok =====");)
+        # (debug) && (println(samp.usageS);)
+        # (debug) && (println(prevUsageS);)
+        # (debug) && (println(samp.usageN);)
+        # (debug) && (println(prevUsageN);)
+        # (debug) && (println((ln_P_ratio_true, ln_P_ratio));)
+        # (debug) && (println((ln_P_next_true, ln_q_next, accNext));)
+        # (debug) && (println((ln_P_prev_true, ln_q_prev, accPrev));)
+
+        (debug) && ( if abs(ln_P_ratio_true) > 1e-5 && abs((ln_P_ratio_true - ln_P_ratio)/ln_P_ratio) > eps;
+                        println("==== NG =====");
+                        println(i);
+                        println(samp.usageS);
+                        println(prevUsageS);
+                        println(samp.usageN);
+                        println(prevUsageN);
+                        println((ln_P_ratio_true, ln_P_ratio));
+                        println((ln_P_next_true, ln_q_next, accNext));
+                        println((ln_P_prev_true, ln_q_prev, accPrev));
+                        # @assert abs((ln_P_ratio_true - ln_P_ratio)/ln_P_ratio) <= eps;
+                    end;
+        )
+
+        if rand() > accRate # rejected
+            tableGraph.rmEdge!(samp.L_s, i, next_to)
+            tableGraph.addEdge!(samp.L_s, i, prev_to)
+            samp.L_n     = deepcopy(prev_L_n)
+            samp.usageN  = deepcopy(prevUsageN)
+            samp.unUsedN = deepcopy(prevUnUsedN)
+            samp.S_n     = deepcopy(prevS_n)
             samp.usageS  = deepcopy(prevUsageS)
             samp.unUsedS = deepcopy(prevUnUsedS)
             samp.S_s     = deepcopy(prevS_s)
@@ -881,17 +1278,27 @@ module sampler
         return nothing
     end
 
-    function sampleB!(samp::Sampler{I, R}, c::I, m::I) where {I <: Integer, R <: Real}
+    # DONE: ln_P_Y add argument
+    # TODO: refactoring all sampler funciton to return ratio of ln_P_next / ln_P_prev
+    function sampleB!(samp::Sampler{I, R}, c::I, m::I, debug::Bool = false) where {I <: Integer, R <: Real}
         (samp.B[c, m] == 4) && (return nothing)
         # ln_p_correct::Array{R, 1} = [0.0, 0.0, 0.0]
         ln_p::Array{R, 1} = convert.(R, [0.0, 0.0, 0.0])
         rangeB::AbstractRange{I} = (I)(1):(I)(3)
         (samp.B[c,m] != 1) && (rangeB = (I)(3):(I)(-1):(I)(1))
+
+        (debug) && (debug = debug && (R == Float64))
+        (debug) && (ln_P_prev_true::R = (R)(0.0); ln_P_next_true::R = (R)(0.0); ln_P_prev::R = (R)(0.0); ln_P_next::R = (R)(0.0);
+                    ln_P_ratio_true::R = (R)(0.0); ln_P_ratio::R = (R)(0.0); eps::R = (R)(0.0);)
+        (debug) && ( if (R==Float64); eps = (R)(1e-2); end;)
+        (debug) && (ln_P_prev_true = ln_P_all(samp))
+        (debug) && (now_B::I = samp.B[c,m])
+
         for t in (I)(1):(I)(3)
             samp.B[c, m] = t
             buffPhyloMatrix.update!(samp.treeCache, samp.B, samp.usageS, samp.usageV)
             ln_p[t] += log(ℯ, samp.param.δ_s[t])
-            ln_p[t] += __sampler.ln_P_Y(samp.Z, samp.H, samp.S_s, samp.S_v, samp.B, samp.a, samp.f,
+            ln_p[t] += __sampler.ln_P_Y(samp.Z, samp.H, samp.S_s, samp.S_n, samp.S_v, samp.usageN, samp.B, samp.a, samp.f,
                                         samp.g, samp.u, samp.er, samp.param,
                                         rangeS = samp.usageS[c], rangeV = samp.usageV[m])
             ln_p[t] += __sampler.ln_P_V(samp.Z, samp.usageS, samp.usageV, samp.B, samp.erSet,
@@ -901,6 +1308,20 @@ module sampler
         __sampler.exp_normalize!(ln_p)
         samp.B[c, m] = argmax( random.sampleMultiNomial((I)(1), ln_p) )
         buffPhyloMatrix.update!(samp.treeCache, samp.B, samp.usageS, samp.usageV)
+
+        (debug) && (ln_P_next_true = ln_P_all(samp))
+        (debug) && (ln_P_prev = log(ℯ, ln_p[now_B]))
+        (debug) && (ln_P_next = log(ℯ, ln_p[samp.B[c,m]]))
+        (debug) && (ln_P_ratio_true = ln_P_next_true - ln_P_prev_true;
+                    ln_P_ratio      = ln_P_next      - ln_P_prev;)
+        (debug) && ( if abs(ln_P_ratio_true) > 1e-5 && abs((ln_P_ratio_true - ln_P_ratio)/ln_P_ratio) > eps;
+                        println((ln_P_ratio_true, ln_P_ratio));
+                        println((ln_P_next_true, ln_P_next));
+                        println((ln_P_prev_true, ln_P_prev));
+                        @assert abs((ln_P_ratio_true - ln_P_ratio)/ln_P_ratio) <= eps;
+                    end;
+        )
+
         # if abs( (ln_p_temp[now_B] - ln_p_temp[new_B]) - (ln_p_correct[now_B] - ln_p_correct[new_B]) ) > 0.001
         #     print("(ln_p_temp[now_B] - ln_p_temp[new_B])"); println((ln_p_temp[now_B] - ln_p_temp[new_B]))
         #     print("ln_p_temp[now_B]"); println(ln_p_temp[now_B])
@@ -913,7 +1334,9 @@ module sampler
         return nothing
     end
 
-
+    # DONE: sampleL! -> sampleLs!
+    # DONE: modify sampleS_v!, sampleB!, sampleF!, sampleZ!
+    # TODO: refactoring all sampler funciton to return ratio of ln_P_next / ln_P_prev
     function sampleMAP!(samp::Sampler{I, R};
                         seed::I = (I)(0),
                         iter::I = (I)(100000),
@@ -927,30 +1350,42 @@ module sampler
         maxLn::R = (R)(-Inf)
         for count in (I)(1):(iter+burnin)
             S::I, M::I = size(samp.Z)
+            assertNestedClusterValidity(samp)
             __sampler.updatePenalty!((I)(count),
                                     samp.param.ln_p_v,
                                     samp.anneal.ln_p_ladders,
                                     samp.anneal.period)
-
-            sampleZ!(samp)
-            sampleH!(samp)
+            assertNestedClusterValidity(samp, "after updatePenalty")
+            sampleZ!(samp, count > 1000)
+            assertNestedClusterValidity(samp, "after sampleZ!")
+            sampleH!(samp, count > 1000)
+            assertNestedClusterValidity(samp, "after sampleH!")
 
             for i in (I)(1):S
-                sampleL!(samp, (I)(i), true)
+                sampleL!(samp, (I)(i), count > 1000)
+                assertNestedClusterValidity(samp, "after sampleL! at" * string(i))
             end
 
-            sampleP_err!(samp)
+            sampleP_err!(samp, count > 1000)
+            assertNestedClusterValidity(samp, "after sampleP_err!")
             for j in (I)(1):M
-                sampleS_v!(samp,  (I)(j))
+                sampleS_v!(samp,  (I)(j), count > 1000)
+                assertNestedClusterValidity(samp, "after sampleS_v! at" * string(j))
             end
 
-            sampleA!(samp)
-            sampleF!(samp)
-            sampleG!(samp)
-            sampleU!(samp)
+
+            sampleA!(samp, count > 1000)
+            assertNestedClusterValidity(samp, "after sampleA!")
+            sampleF!(samp, count > 1000)
+            assertNestedClusterValidity(samp, "after sampleF!")
+            sampleG!(samp, count > 1000)
+            assertNestedClusterValidity(samp, "after sampleG!")
+            sampleU!(samp, count > 1000)
+            assertNestedClusterValidity(samp, "after sampleU!")
 
             for (c,m) in Iterators.product(keys(samp.usageS), keys(samp.usageV))
-                sampleB!(samp,  (I)(c), (I)(m))
+                sampleB!(samp,  (I)(c), (I)(m), count > 1000)
+                assertNestedClusterValidity(samp, "after sampleB! at" * string((c,m)))
             end
 
             if count > burnin && count % thin == 0
@@ -969,6 +1404,8 @@ module sampler
         return (mapState, lnProbs)
     end
 
+    # DONE: sampleL! -> sampleLs!
+    # DONE: modify sampleS_v!, sampleB!, sampleF!, sampleZ!
     # return the (state of MAP, iterCount, lnProb) with in this iterations
     function sampleAll!(samp::Sampler{I, R};
                         seed::I = (I)(0),
@@ -1054,6 +1491,8 @@ module sampler
         return sampled
     end
 
+    # DONE: L, S, usageS ->  L^(1), L^(2), S^(1)_s S^(2)_s, usageS^(1), usageS^(2)
+    # DONE: Use different distance matix for L_s and L_n
     function init(errScorePath::String, patScorePath::String, matScorePath::String, paramPath::String)
         lnP_D::Array{REAL, 3}   = __sampler.parseData(errScorePath, patScorePath, matScorePath)
         param::Parameters{INT,REAL}, anneal::Annealer{INT, REAL} = inputParser.parseConfigFile(paramPath::String)
@@ -1067,20 +1506,29 @@ module sampler
         Z::Array{INT, 2}   = convert.(INT, fill(1,S,M)) # init ℤ, Z[i,j] ∈ {1,2}, 1: error, 2: tumor
         H::Array{INT, 2}   = convert.(INT, fill(1,S,M)) # init H, H[i,j] ∈ {1,2}, 1: mat,   2: pat
 
-        D::Array{REAL, 2}  = distanceParser.parseBFHammingDistance(errScorePath, patScorePath, matScorePath, paramPath, "alpha_s")
-        decayFunc = distanceParser.parseDecayFunction(paramPath)
+        D_s::Array{REAL, 2}  = distanceParser.parseBFHammingDistance(errScorePath, patScorePath, matScorePath, paramPath, "alpha_s")
+        decayFuncS = distanceParser.parseDecayFunction(paramPath)
+        D_n::Array{REAL, 2}  = distanceParser.parseBFHammingDistance(errScorePath, patScorePath, matScorePath, paramPath, "alpha_n")
+        decayFuncN = distanceParser.parseDecayFunction(paramPath, distanceTag = "distance",
+                                                       decayFunctionTag = "decayFunctionNest", decayRateTag = "decayRateNest")
         for (i,j) in Iterators.product((INT)(1):S,(INT)(1):S)
-            (i != j) && ( D[i,j] = decayFunc(D[i,j]))
+            (i != j) && ( D_s[i,j] = decayFuncS(D_s[i,j]))
+            (i != j) && ( D_n[i,j] = decayFuncN(D_n[i,j]))
         end
         println("f(distance)")
-        println(D)
-        L::TableGraph{INT, REAL} = tableGraph.init(S, D)
+        println(D_s)
+        println(D_n)
+        L_s::TableGraph{INT, REAL} = tableGraph.init(S, D_s)
+        L_n::TableGraph{INT, REAL} = tableGraph.init(S, D_n)
 
         s_s::Array{INT, 1} = convert.(INT, collect(1:S)) # init sample wise cluster
+        s_n::Array{INT, 1} = convert.(INT, collect(1:S)) # init sample wise cluster
         s_v::Array{INT, 1} = convert.(INT, collect(1:M)) # init mutation wise cluster
         usageS::Dict{INT,Array{INT,1}} = Dict{INT,Array{INT,1}}()
+        usageN::Dict{INT,Array{INT,1}} = Dict{INT,Array{INT,1}}()
         usageV::Dict{INT,Array{INT,1}} = Dict{INT,Array{INT,1}}()
         for s in (INT)(1):S; usageS[s] = [s]; end
+        for s in (INT)(1):S; usageN[s] = [s]; end
         for m in (INT)(1):M; usageV[m] = [m]; end
 
         a::Array{INT, 1} = convert.(INT, fill(1, S))    # init merge sample indicator
@@ -1096,7 +1544,7 @@ module sampler
 
         treeCache::BuffPhyloMatrix{INT} = buffPhyloMatrix.init(S, M, bufferSize = M)
 
-        samp::Sampler{INT, REAL} = Sampler{INT, REAL}(Z, H, L, s_s, s_v, usageS, usageV, Set{INT}(), Set{INT}(),
+        samp::Sampler{INT, REAL} = Sampler{INT, REAL}(Z, H, L_s, L_n, s_s, s_n, s_v, usageS, usageN, usageV, Set{INT}(), Set{INT}(), Set{INT}(),
                                                       a, f, g, u, p_err, er, Set{INT}(),  B, treeCache, lnP_D, param, anneal, (REAL)(0.0))
         samp.lnProb = ln_P_all(samp)
         return samp

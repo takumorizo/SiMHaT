@@ -258,7 +258,11 @@ module result
         #     write(file, "sMax", sMax)
         #     write(file, "lnProbs", lnProbs)
         # end
-        save(JLDFilePath, "sMax", sMax, "lnProbs", lnProbs)
+        # save(JLDFilePath, "sMax", sMax, "lnProbs", lnProbs)
+        jldopen(JLDFilePath, "w") do file
+            file["sMax"]    = sMax
+            file["lnProbs"] = lnProbs
+        end
     end
 
     function readFromJLD(JLDFilePath)
@@ -274,6 +278,9 @@ module result
         return sMax, lnProbs
     end
 
+    #= TODO:
+    sMax.usageS -> sMax.usageS^(1)
+    =#
     function viewMAP(sMax, lnProbs, outputDir::String)
         pyplot()
         iters = collect(1:length(lnProbs))
