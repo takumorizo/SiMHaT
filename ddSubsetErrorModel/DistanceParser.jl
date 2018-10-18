@@ -1,5 +1,5 @@
 Include("config.jl")
-Include("inputFileParser.jl")
+Include("InputParser.jl")
 
 module DistanceParser
     using ..config

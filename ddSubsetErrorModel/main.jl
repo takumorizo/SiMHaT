@@ -1,7 +1,7 @@
 include("include.jl")
-Include("result.jl")
+Include("Result.jl")
 Include("config.jl")
-Include("sampler.jl")
+Include("SamplerType.jl")
 
 using ..SamplerType
 using ..Result

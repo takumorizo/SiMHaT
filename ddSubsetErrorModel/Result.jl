@@ -1,7 +1,7 @@
 Include("config.jl")
-Include("buffPhyloMatrix.jl")
-Include("sampler.jl")
-Include("inputFileParser.jl")
+Include("BuffPhyloMatrixType.jl")
+Include("SamplerType.jl")
+Include("InputParser.jl")
 
 module Result
     using Plots

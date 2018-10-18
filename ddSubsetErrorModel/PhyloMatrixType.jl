@@ -1,4 +1,4 @@
-Include("sortingCache2D.jl")
+Include("SortingCache2DType.jl")
 
 
 module PhyloMatrixType

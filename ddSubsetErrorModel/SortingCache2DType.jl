@@ -1,4 +1,4 @@
-Include("phylogenyTree.jl")
+Include("PhylogenyTree.jl")
 
 module SortingCache2DType
     mutable struct SortingCache2D{I}

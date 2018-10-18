@@ -1,4 +1,4 @@
-Include("phyloMatrix.jl")
+Include("PhyloMatrixType.jl")
 
 module BuffPhyloMatrixType
     using ..PhyloMatrixType
