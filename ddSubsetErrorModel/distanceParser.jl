@@ -1,18 +1,18 @@
 Include("config.jl")
 Include("inputFileParser.jl")
 
-module distanceParser
+module DistanceParser
     using ..config
-    using ..inputParser
+    using ..InputParser
     using ConfParser
     function parseBFHammingDistance(errScorePath::String,
                                     patScorePath::String,
                                     matScorePath::String,
                                     paramFilePath::String,
                                     alphaName::String)::Array{REAL, 2}
-        errScore::Array{REAL, 2} = inputParser.parseInputSummary(errScorePath)
-        matScore::Array{REAL, 2} = inputParser.parseInputSummary(matScorePath)
-        patScore::Array{REAL, 2} = inputParser.parseInputSummary(patScorePath)
+        errScore::Array{REAL, 2} = InputParser.parseInputSummary(errScorePath)
+        matScore::Array{REAL, 2} = InputParser.parseInputSummary(matScorePath)
+        patScore::Array{REAL, 2} = InputParser.parseInputSummary(patScorePath)
 
         conf = ConfParse(paramFilePath)
         parse_conf!(conf)
@@ -46,7 +46,7 @@ module distanceParser
     end
 
     function parsePhysicalDistance(distanceFilePath::String)::Array{REAL, 2}
-        distanceMatrix::Array{REAL, 2} = inputParser.parseInputSummary(distanceFilePath)
+        distanceMatrix::Array{REAL, 2} = InputParser.parseInputSummary(distanceFilePath)
         return distanceMatrix
     end
 

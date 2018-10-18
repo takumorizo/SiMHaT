@@ -1,6 +1,5 @@
-module __phylogenyTree
-    # assume that sorted Mat is coloum-wise-sorted in an descending order.
-    function isPhylogenic(sortedMat::AbstractArray{I, 2},
+module PhylogenyTree
+    function _isPhylogenic(sortedMat::AbstractArray{I, 2},
                           buffer2D::AbstractArray{I, 2};
                           offset::I = (I)(0), checkDriver::Bool = false)::Bool where {I <: Integer}
         X, Y = size(sortedMat)
@@ -32,7 +31,7 @@ module __phylogenyTree
         return (!checkDriver) || (zeroCount==1)
     end
 
-    function radixSort(matrix::AbstractArray{I, 2};
+    function _radixSort(matrix::AbstractArray{I, 2};
                        ascendDigit::Bool = true,
                        base::I = (I)(2),
                        descend::Bool = false,
@@ -70,11 +69,7 @@ module __phylogenyTree
             return ans
         end
     end
-end
 
-
-module phylogenyTree
-    using ..__phylogenyTree
     function isPhylogenic(binMat::AbstractArray{I, 2};
                           offset::I = (I)(0),
                           checkDriver::Bool = false,
@@ -86,9 +81,8 @@ module phylogenyTree
             if X < minX || Y < minY
                 return false
             end
-            orderY::Array{I, 1} = __phylogenyTree.radixSort(binMat,
-                                                            ascendDigit = true, base = (I)(2), descend = true, offset = offset)
+            orderY::Array{I, 1} = _radixSort(binMat,ascendDigit = true, base = (I)(2), descend = true, offset = offset)
             buffer2D = fill((I)(0), X, Y)
-            return __phylogenyTree.isPhylogenic( view((binMat), (I)(1):X, orderY), buffer2D, offset = offset, checkDriver = checkDriver)
+            return _isPhylogenic( view((binMat), (I)(1):X, orderY), buffer2D, offset = offset, checkDriver = checkDriver)
     end
 end

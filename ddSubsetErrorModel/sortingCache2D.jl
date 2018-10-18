@@ -1,13 +1,85 @@
 Include("phylogenyTree.jl")
 
-module __sortingCache2D
-    # a == b
-    function eq(a::AbstractArray{I,1}, b::AbstractArray{I,1})::Bool where{I <: Integer}
+module SortingCache2DType
+    mutable struct SortingCache2D{I}
+        matrix::Array{I,2}  # R * (1+C+1+bufferSize)
+        LLLeft::Array{I,2}  # R * (1+C+1+bufferSize)
+        LLRight::Array{I,2} # R * (1+C+1+bufferSize)
+
+        sortedCols::Array{I,1} # col private indexing
+        R::I # row size public indexing
+        C::I # col size public indexing
+        descend::Bool
+        linkedValue::I
+    end
+    export SortingCache2D
+
+    @inline function at(cache::SortingCache2D{I}, i::I)::I where {I <: Integer}
+        return (I)(1)+i
+    end
+
+    function init(R::I, C::I;
+                  descend::Bool = true, linkedValue::I = (I)(1)) where {I <: Integer}
+        matrix::Array{I,2}  = zeros(R, C + (I)(2))
+        LLLeft::Array{I,2}  = zeros(R, C + (I)(2))
+        LLRight::Array{I,2} = zeros(R, C + (I)(2))
+
+        for r in (I)(1):R
+            LLLeft[r, C + (I)(2)] = (I)(1)
+            LLRight[r, (I)(1)]    = C + (I)(2)
+        end
+
+        sortedCols::Array{I, 1} = []
+        bufferUsed::I = (I)(0)
+
+        return SortingCache2D(
+                matrix, LLLeft, LLRight,
+                sortedCols, R, C,
+                descend, linkedValue)
+    end
+
+    function add!(cache::SortingCache2D{I}, col::I, v::AbstractArray{I,1})::Nothing where {I <: Integer}
+        privateCol::I = at(cache, col)
+        @assert privateCol ∉ cache.sortedCols && ((I)(1) <= col <= cache.C)
+        addAt::I = _binSearch!(cache.matrix, cache.sortedCols,
+                                               v, privateCol, cache.descend)
+        _addLinkedList!(cache.matrix, cache.LLLeft, cache.LLRight,
+                                        cache.sortedCols, addAt)
+        return nothing
+    end
+
+    function rm!(cache::SortingCache2D{I}, col::I)::Nothing where {I <: Integer}
+        privateCol::I = at(cache, col)
+        @assert privateCol ∈ cache.sortedCols && ((I)(1) <= col <= cache.C)
+        # rmAt::I = findfirst(cache.sortedCols, privateCol)
+        rmAt::I = something(findfirst(isequal(privateCol), cache.sortedCols), 0)
+        _rmLinkedList!(cache.matrix, cache.LLLeft, cache.LLRight,
+                                       cache.sortedCols, rmAt)
+        deleteat!(cache.sortedCols, rmAt)
+        return nothing
+    end
+
+    function edit!(cache::SortingCache2D{I}, row::I, col::I, value::I)::Nothing where {I <: Integer}
+        @assert (I)(1) <= row <= cache.R
+        privateCol::I = at(cache, col)
+        if cache.matrix[row, privateCol] == value
+            return
+        end
+        v::Array{I,1} = deepcopy(cache.matrix[:, privateCol])
+        v[row] = value
+        if privateCol ∈ cache.sortedCols
+            rm!(cache, col)
+        end
+        add!(cache, col, v)
+        return nothing
+    end
+
+    function _eq(a::AbstractArray{I,1}, b::AbstractArray{I,1})::Bool where{I <: Integer}
         return mapreduce(x->x, &, a.==b)
     end
 
     # a > b
-    function gt(a::AbstractArray{I,1}, b::AbstractArray{I,1})::Bool where{I <: Integer}
+    function _gt(a::AbstractArray{I,1}, b::AbstractArray{I,1})::Bool where{I <: Integer}
         isGtEq::Bool = true
         isGt::Bool   = false
         for i in 1:length(a)
@@ -24,7 +96,7 @@ module __sortingCache2D
     end
 
     # a < b
-    function lt(a::AbstractArray{I,1}, b::AbstractArray{I,1})::Bool where{I <: Integer}
+    function _lt(a::AbstractArray{I,1}, b::AbstractArray{I,1})::Bool where{I <: Integer}
         isLtEq::Bool = true
         isLt::Bool   = false
         for i in 1:length(a)
@@ -44,7 +116,7 @@ module __sortingCache2D
     # sortedCols: private indexing
     # v : added vector
     # col : private indexing
-    function binSearchAscend!(matrix::AbstractArray{I, 2},
+    function _binSearchAscend!(matrix::AbstractArray{I, 2},
                               sortedCols::AbstractArray{I,1},
                               v::AbstractArray{I, 1}, col::I)::I where {I <: Integer}
         R::I, C::I = size(matrix)
@@ -55,21 +127,21 @@ module __sortingCache2D
         else
             left::I  = (I)(1)
             right::I = length(sortedCols)
-            if !(__sortingCache2D.gt(matrix[:,sortedCols[right]], v))
+            if !(_gt(matrix[:,sortedCols[right]], v))
                 push!(sortedCols, col)
                 return length(sortedCols)
-            elseif __sortingCache2D.lt(v, matrix[:,sortedCols[left]])
+            elseif _lt(v, matrix[:,sortedCols[left]])
                 insert!(sortedCols, 1, col)
                 return (I)(1)
             else
                 while right - left > 1
                     m::I = div(left+right, (I)(2))
-                    if eq(matrix[:,sortedCols[m]], v)
+                    if _eq(matrix[:,sortedCols[m]], v)
                         left  = m
                         right = left+(I)(1)
                         break
                     end
-                    trimRight::Bool = gt(matrix[:, sortedCols[m]], v)
+                    trimRight::Bool = _gt(matrix[:, sortedCols[m]], v)
                     if trimRight
                         right = m
                     else
@@ -86,7 +158,7 @@ module __sortingCache2D
     # sortedCols: private indexing
     # v : added vector
     # col : private indexing
-    function binSearchDescend!(matrix::AbstractArray{I, 2},
+    function _binSearchDescend!(matrix::AbstractArray{I, 2},
                                sortedCols::AbstractArray{I,1},
                                v::AbstractArray{I, 1}, col::I)::I where {I <: Integer}
         R::I, C::I = size(matrix)
@@ -98,21 +170,21 @@ module __sortingCache2D
             left::I  = (I)(1)
             right::I = length(sortedCols)
             # [left, right ], not left >= v > right
-            if !(__sortingCache2D.lt(matrix[:,sortedCols[right]], v))
+            if !(_lt(matrix[:,sortedCols[right]], v))
                 push!(sortedCols, col)
                 return length(sortedCols)
-            elseif __sortingCache2D.gt(v, matrix[:,sortedCols[left]])
+            elseif _gt(v, matrix[:,sortedCols[left]])
                 insert!(sortedCols, 1, col)
                 return (I)(1)
             else
                 while right - left > 1
                     m::I = div(left+right, (I)(2))
-                    if eq(matrix[:,sortedCols[m]], v)
+                    if _eq(matrix[:,sortedCols[m]], v)
                         left  = m
                         right = left+(I)(1)
                         break
                     end
-                    trimRight::Bool = lt(matrix[:, sortedCols[m]], v)
+                    trimRight::Bool = _lt(matrix[:, sortedCols[m]], v)
                     if trimRight # m < v <= left
                         right = m
                     else # m >= v > right
@@ -125,14 +197,14 @@ module __sortingCache2D
         end
     end
 
-    function binSearch!(matrix::AbstractArray{I, 2},
+    function _binSearch!(matrix::AbstractArray{I, 2},
                         sortedCols::AbstractArray{I,1},
                         v::AbstractArray{I, 1}, col::I,
                         descend::Bool)::I where {I <: Integer}
         if descend
-            return binSearchDescend!(matrix, sortedCols, v, col)
+            return _binSearchDescend!(matrix, sortedCols, v, col)
         else
-            return binSearchAscend!(matrix, sortedCols, v, col)
+            return _binSearchAscend!(matrix, sortedCols, v, col)
         end
     end
 
@@ -144,7 +216,7 @@ module __sortingCache2D
     # linkVal : value which is linked bi-directionally
     # interval : window size for neighborhood search
     # LyUpdates : return private index array where Ly must be updated
-    function rmLinkedList!(matrix::AbstractArray{I, 2},
+    function _rmLinkedList!(matrix::AbstractArray{I, 2},
                           LLLeft::AbstractArray{I, 2},
                           LLRight::AbstractArray{I, 2},
                           sortedCols::AbstractArray{I, 1},
@@ -175,7 +247,7 @@ module __sortingCache2D
     # linkVal : value which is linked bi-directionally
     # interval : window size for neighborhood search
     # LyUpdates : return private index array where Ly must be updated
-    function addLinkedList!(matrix::AbstractArray{I, 2},
+    function _addLinkedList!(matrix::AbstractArray{I, 2},
                             LLLeft::AbstractArray{I, 2},
                             LLRight::AbstractArray{I, 2},
                             sortedCols::AbstractArray{I, 1},
@@ -236,84 +308,6 @@ module __sortingCache2D
             end
         end
         return LyUpdates
-    end
-end
-
-
-module sortingCache2D
-    using ..__sortingCache2D
-
-    mutable struct SortingCache2D{I}
-        matrix::Array{I,2}  # R * (1+C+1+bufferSize)
-        LLLeft::Array{I,2}  # R * (1+C+1+bufferSize)
-        LLRight::Array{I,2} # R * (1+C+1+bufferSize)
-
-        sortedCols::Array{I,1} # col private indexing
-        R::I # row size public indexing
-        C::I # col size public indexing
-        descend::Bool
-        linkedValue::I
-    end
-    export SortingCache2D
-
-    @inline function at(cache::SortingCache2D{I}, i::I)::I where {I <: Integer}
-        return (I)(1)+i
-    end
-
-    function init(R::I, C::I;
-                  descend::Bool = true, linkedValue::I = (I)(1)) where {I <: Integer}
-        matrix::Array{I,2}  = zeros(R, C + (I)(2))
-        LLLeft::Array{I,2}  = zeros(R, C + (I)(2))
-        LLRight::Array{I,2} = zeros(R, C + (I)(2))
-
-        for r in (I)(1):R
-            LLLeft[r, C + (I)(2)] = (I)(1)
-            LLRight[r, (I)(1)]    = C + (I)(2)
-        end
-
-        sortedCols::Array{I, 1} = []
-        bufferUsed::I = (I)(0)
-
-        return SortingCache2D(
-                matrix, LLLeft, LLRight,
-                sortedCols, R, C,
-                descend, linkedValue)
-    end
-
-    function add!(cache::SortingCache2D{I}, col::I, v::AbstractArray{I,1})::Nothing where {I <: Integer}
-        privateCol::I = at(cache, col)
-        @assert privateCol ∉ cache.sortedCols && ((I)(1) <= col <= cache.C)
-        addAt::I = __sortingCache2D.binSearch!(cache.matrix, cache.sortedCols,
-                                               v, privateCol, cache.descend)
-        __sortingCache2D.addLinkedList!(cache.matrix, cache.LLLeft, cache.LLRight,
-                                        cache.sortedCols, addAt)
-        return nothing
-    end
-
-    function rm!(cache::SortingCache2D{I}, col::I)::Nothing where {I <: Integer}
-        privateCol::I = at(cache, col)
-        @assert privateCol ∈ cache.sortedCols && ((I)(1) <= col <= cache.C)
-        # rmAt::I = findfirst(cache.sortedCols, privateCol)
-        rmAt::I = something(findfirst(isequal(privateCol), cache.sortedCols), 0)
-        __sortingCache2D.rmLinkedList!(cache.matrix, cache.LLLeft, cache.LLRight,
-                                       cache.sortedCols, rmAt)
-        deleteat!(cache.sortedCols, rmAt)
-        return nothing
-    end
-
-    function edit!(cache::SortingCache2D{I}, row::I, col::I, value::I)::Nothing where {I <: Integer}
-        @assert (I)(1) <= row <= cache.R
-        privateCol::I = at(cache, col)
-        if cache.matrix[row, privateCol] == value
-            return
-        end
-        v::Array{I,1} = deepcopy(cache.matrix[:, privateCol])
-        v[row] = value
-        if privateCol ∈ cache.sortedCols
-            rm!(cache, col)
-        end
-        add!(cache, col, v)
-        return nothing
     end
 
 end

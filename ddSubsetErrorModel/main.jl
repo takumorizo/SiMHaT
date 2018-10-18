@@ -3,8 +3,8 @@ Include("result.jl")
 Include("config.jl")
 Include("sampler.jl")
 
-using ..sampler
-using ..result
+using ..SamplerType
+using ..Result
 using DocOpt
 using Plots
 using Dates
@@ -37,12 +37,12 @@ args = docopt(doc)
 println(args)
 
 if args["MAP"] == "MAP"
-    @time sMax, lnProbs  = sampler.execMAP(args["<errScore>"], args["<matScore>"], args["<patScore>"], args["<iniFile>"],
-                                           seed = parse(INT, args["--seed"]), iter = parse(INT, args["--number"]), thin = parse(INT, args["--thin"]), burnin = parse(INT, args["--burnin"]))
-    result.writeToJLD(sMax, lnProbs, args["--outDir"] * "/sampleAns.jld2")
-    result.viewMAP(sMax, lnProbs, args["--outDir"])
+    @time smax, lnprobs  = SamplerType.exec_map(args["<errScore>"], args["<matScore>"], args["<patScore>"], args["<iniFile>"],
+                                                seed = parse(INT, args["--seed"]), iter = parse(INT, args["--number"]), thin = parse(INT, args["--thin"]), burnin = parse(INT, args["--burnin"]))
+    Result.writejld(smax, lnprobs, args["--outDir"] * "/sampleAns.jld2")
+    Result.viewmap(smax, lnprobs, args["--outDir"])
 elseif args["EVAL"] == "EVAL"
-    precision, recall, fvalue = result.evaluateFvalue(args["<answer>"], args["<score>"], parse(REAL, args["--threshold"]), args["--rmError"])
+    precision, recall, fvalue = Result.evaluatefvalue(args["<answer>"], args["<score>"], parse(REAL, args["--threshold"]), args["--rmError"])
     println((precision, recall, fvalue))
-    result.storeFvalue(args["<result>"], precision, recall, fvalue, String(args["--tag"]))
+    Result.savefvalue(args["<result>"], precision, recall, fvalue, String(args["--tag"]))
 end

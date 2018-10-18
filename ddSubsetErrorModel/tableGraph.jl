@@ -1,5 +1,5 @@
 
-module tableGraph
+module TableGraphType
     export TableGraph
     mutable struct TableGraph{I, R}
         E::Array{I, 2} # edge[to, from] = 1

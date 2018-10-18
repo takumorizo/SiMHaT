@@ -1,6 +1,6 @@
 Include("config.jl")
 
-module inputParser
+module InputParser
     using ConfParser
     using ..config
 
