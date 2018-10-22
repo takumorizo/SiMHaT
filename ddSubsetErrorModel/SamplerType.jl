@@ -1,8 +1,8 @@
-Include("InputParser.jl")
-Include("RandomUtil.jl")
-Include("BuffPhyloMatrixType.jl")
-Include("TableGraphType.jl")
-Include("DistanceParser.jl")
+@Include "InputParser.jl"
+@Include "RandomUtil.jl"
+@Include "BuffPhyloMatrixType.jl"
+@Include "TableGraphType.jl"
+@Include "DistanceParser.jl"
 
 """
 ddSubsetErrorModel sampling script

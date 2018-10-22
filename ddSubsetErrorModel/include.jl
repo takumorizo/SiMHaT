@@ -1,19 +1,17 @@
 let
     global Include
     existing_files = Set{AbstractString}([])
-    function Include(path::AbstractString, guard::Bool = true)
-        if guard
-            if (path ∉ existing_files)
-                print("include the julia file of: "); println(path)
-                include(path)
-                push!(existing_files, path)
-            else
-                print("avoid re-inclusion of the julia file of: "); println(path)
-                println(existing_files)
-            end
-        else
+    function Include(path::AbstractString; filename::AbstractString = "None file", linenum::Integer = -1)
+        if (path ∉ existing_files)
+            print("include the julia file of: "); println(path)
             include(path)
             push!(existing_files, path)
+        else
+            println("TODO: avoid re-inclusion of the julia file of: " * string(path) * " at " * string(filename) * ":" * string(linenum));
         end
     end
+end
+
+macro Include(path)
+    :(Include($path, filename = $(string(__source__.file)), linenum = $(__source__.line)))
 end

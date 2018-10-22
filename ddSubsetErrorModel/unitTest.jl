@@ -1,8 +1,8 @@
 include("include.jl")
-Include("PhylogenyTree.jl")
-Include("SortingCache2DType.jl")
-Include("PhyloMatrixType.jl")
-Include("BuffPhyloMatrixType.jl")
+@Include "PhylogenyTree.jl"
+@Include "SortingCache2DType.jl"
+@Include "PhyloMatrixType.jl"
+@Include "BuffPhyloMatrixType.jl"
 
 module PhylogenyTreeTest
     using Test

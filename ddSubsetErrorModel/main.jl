@@ -1,7 +1,7 @@
 module SiMHaT
     include("include.jl")
-    Include("Result.jl")
-    Include("SamplerType.jl")
+    @Include "Result.jl"
+    @Include "SamplerType.jl"
 
     using .SamplerType
     using .Result

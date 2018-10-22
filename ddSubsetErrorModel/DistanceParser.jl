@@ -1,4 +1,4 @@
-Include("InputParser.jl")
+@Include "InputParser.jl"
 
 module DistanceParser
     using ..InputParser

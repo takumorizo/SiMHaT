@@ -1,6 +1,6 @@
-Include("BuffPhyloMatrixType.jl")
-Include("SamplerType.jl")
-Include("InputParser.jl")
+@Include "BuffPhyloMatrixType.jl"
+@Include "SamplerType.jl"
+@Include "InputParser.jl"
 
 module Result
     using Plots
