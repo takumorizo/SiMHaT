@@ -64,7 +64,7 @@ module PhylogenyTreeTest
                 end
             end
 
-            order = PhylogenyTree._radixSort(mat, ascendDigit = false, base = 2, descend = false)
+            order = PhylogenyTree._radixsort(mat, ascend_digit = false, base = 2, descend = false)
             ok = true
             for isSame in (allNums[order].== sort(allNums))
                 ok = ok && isSame
@@ -77,7 +77,7 @@ module PhylogenyTreeTest
             Y = 50
             treeMat = zeros(Int, X, Y);
             _makeTreeMatrixRandomly!(treeMat, 1:X, 1:Y);
-            push!(phyloCheckResults, PhylogenyTree.isPhylogenic( treeMat[ Random.randperm(X), Random.randperm(Y)] ))
+            push!(phyloCheckResults, PhylogenyTree.isphylogenic( treeMat[ Random.randperm(X), Random.randperm(Y)] ))
         end
 
         @testset "radix sort"     begin
@@ -99,7 +99,7 @@ module SortingCache2DTest
 
     function _genRandom2DMatrices(D::I, N::I;
                                  descend::Bool = true,
-                                 ascendDigit::Bool = false,
+                                 ascend_digit::Bool = false,
                                  base::I = 2)  where {I <: Integer}
         array = []
         for i in 1:N
@@ -112,7 +112,7 @@ module SortingCache2DTest
             aDigits = aDigits[length(aDigits):-1:1] # println(array[i]); println(aDigits)
             matrix[:,i] = aDigits
         end
-        sortedAns = PhylogenyTree._radixSort(matrix, descend = true, ascendDigit = false, base = 2) # print("sorted: ");println(array[sortedAns])
+        sortedAns = PhylogenyTree._radixsort(matrix, descend = true, ascend_digit = false, base = 2) # print("sorted: ");println(array[sortedAns])
         # sortedMat = deepcopy(matrix[:, sortedAns])
         matrixExt = zeros(Int, D, N+2)
         for r in 1:D;for c in 1:N;
@@ -126,8 +126,8 @@ module SortingCache2DTest
 
     function _makeLLLists(matrixExt::AbstractArray{I, 2}, sortedAns::AbstractArray{I, 1}; linkedValue = 1) where {I <: Integer }
         D, N = size(matrixExt)
-        LLLeft  = zeros(I, D, N)
-        LLRight = zeros(I, D, N)
+        llleft  = zeros(I, D, N)
+        llright = zeros(I, D, N)
         N -= 2
         start = 1
         fin = N+2
@@ -135,23 +135,23 @@ module SortingCache2DTest
             from = start
             for c in 1:N
                 if matrixExt[r, sortedAns[c]] == 1
-                    LLRight[r,from] = sortedAns[c]
+                    llright[r,from] = sortedAns[c]
                     from = sortedAns[c]
                 end
             end
-            LLRight[r,from] = fin
+            llright[r,from] = fin
         end
         for r in 1:D
             from = fin
             for c in N:-1:1
                 if matrixExt[r, sortedAns[c]] == 1
-                    LLLeft[r,from] = sortedAns[c]
+                    llleft[r,from] = sortedAns[c]
                     from = sortedAns[c]
                 end
             end
-            LLLeft[r,from] = start
+            llleft[r,from] = start
         end
-        return LLLeft, LLRight
+        return llleft, llright
     end
 
     function _makeTreeMatrixRandomly!(mat::Array{I, 2}, rangeX, rangeY, p = 0.5, divRange=1:3)::Nothing where {I <: Integer}
@@ -188,7 +188,7 @@ module SortingCache2DTest
     function _genRandomTree(D::I, N::I) where {I <: Integer}
         matrix = zeros(I, D, N)
         _makeTreeMatrixRandomly!(matrix, 1:D, 1:N)
-        sortedAns = PhylogenyTree._radixSort(matrix, descend = true, ascendDigit = false, base = 2)
+        sortedAns = PhylogenyTree._radixsort(matrix, descend = true, ascend_digit = false, base = 2)
         matrixExt = zeros(I, D, N+2)
         for r in 1:D;for c in 1:N;
             matrixExt[r,c+1] = matrix[r,c]
@@ -217,17 +217,17 @@ module SortingCache2DTest
         #                 rmAt = sortedAns[rand(1:N)] - 1
         #                 SortingCache2DType.rm!(cache, rmAt)
         #                 SortingCache2DType.add!(cache, rmAt, matrixExt[:, rmAt+1])
-        #                 temp = xor(temp, PhylogenyTree.isPhylogenic(cache.matrix))
+        #                 temp = xor(temp, PhylogenyTree.isphylogenic(cache.matrix))
         #             end
         #         end
         #
         #         @test cache.matrix == matrixExt
-        #         @test matrixExt[:,cache.sortedCols] == matrixExt[:,sortedAns]
+        #         @test matrixExt[:,cache.sorted_cols] == matrixExt[:,sortedAns]
         #
-        #         LLLeft, LLRight = _makeLLLists(matrixExt, cache.sortedCols)
+        #         llleft, llright = _makeLLLists(matrixExt, cache.sorted_cols)
         #
-        #         @test cache.LLLeft == LLLeft
-        #         @test cache.LLRight == LLRight
+        #         @test cache.llleft == llleft
+        #         @test cache.llright == llright
         #     end
         # end
 
@@ -250,12 +250,12 @@ module SortingCache2DTest
                 end
 
                 @test cache.matrix == matrixExt
-                @test matrixExt[:,cache.sortedCols] == matrixExt[:,sortedAns]
+                @test matrixExt[:,cache.sorted_cols] == matrixExt[:,sortedAns]
 
-                LLLeft, LLRight = _makeLLLists(matrixExt, cache.sortedCols)
+                llleft, llright = _makeLLLists(matrixExt, cache.sorted_cols)
 
-                @test cache.LLLeft == LLLeft
-                @test cache.LLRight == LLRight
+                @test cache.llleft == llleft
+                @test cache.llright == llright
             end
         end
 
@@ -274,17 +274,17 @@ module SortingCache2DTest
         #                 rmAt = sortedAns[rand(1:N)] - 1
         #                 SortingCache2DType.rm!(cache, rmAt)
         #                 SortingCache2DType.add!(cache, rmAt, matrixExt[:, rmAt+1])
-        #                 temp = xor(temp, PhylogenyTree.isPhylogenic(cache.matrix))
+        #                 temp = xor(temp, PhylogenyTree.isphylogenic(cache.matrix))
         #             end
         #         end
         #
         #         @test cache.matrix == matrixExt
-        #         @test matrixExt[:,cache.sortedCols] == matrixExt[:,sortedAns]
+        #         @test matrixExt[:,cache.sorted_cols] == matrixExt[:,sortedAns]
         #
-        #         LLLeft, LLRight = _makeLLLists(matrixExt, cache.sortedCols)
+        #         llleft, llright = _makeLLLists(matrixExt, cache.sorted_cols)
         #
-        #         @test cache.LLLeft == LLLeft
-        #         @test cache.LLRight == LLRight
+        #         @test cache.llleft == llleft
+        #         @test cache.llright == llright
         #     end
         # end
 
@@ -307,12 +307,12 @@ module SortingCache2DTest
                 end
 
                 @test cache.matrix == matrixExt
-                @test matrixExt[:,cache.sortedCols] == matrixExt[:,sortedAns]
+                @test matrixExt[:,cache.sorted_cols] == matrixExt[:,sortedAns]
 
-                LLLeft, LLRight = _makeLLLists(matrixExt, cache.sortedCols)
+                llleft, llright = _makeLLLists(matrixExt, cache.sorted_cols)
 
-                @test cache.LLLeft == LLLeft
-                @test cache.LLRight == LLRight
+                @test cache.llleft == llleft
+                @test cache.llright == llright
             end
         end
 
@@ -327,12 +327,12 @@ module SortingCache2DTest
                 end
 
                 @test cache.matrix == matrixExt
-                @test matrixExt[:,cache.sortedCols] == matrixExt[:,sortedAns]
+                @test matrixExt[:,cache.sorted_cols] == matrixExt[:,sortedAns]
 
-                LLLeft, LLRight = _makeLLLists(matrixExt, cache.sortedCols)
+                llleft, llright = _makeLLLists(matrixExt, cache.sorted_cols)
 
-                @test cache.LLLeft == LLLeft
-                @test cache.LLRight == LLRight
+                @test cache.llleft == llleft
+                @test cache.llright == llright
             end
         end
 
@@ -347,18 +347,18 @@ module SortingCache2DTest
                 end
 
                 matrixAns = deepcopy(cache.matrix)
-                sortAns = deepcopy(cache.sortedCols)
+                sortAns = deepcopy(cache.sorted_cols)
                 rmAt = sort[rand(1:N)] - 1
                 SortingCache2DType.rm!(cache, rmAt)
                 SortingCache2DType.add!(cache, rmAt, matrixExt[:, rmAt+1])
 
                 @test cache.matrix == matrixAns == matrixExt
-                @test matrixExt[:,cache.sortedCols] == matrixExt[:,sortAns]
+                @test matrixExt[:,cache.sorted_cols] == matrixExt[:,sortAns]
 
-                LLLeft, LLRight = _makeLLLists(matrixExt, cache.sortedCols)
+                llleft, llright = _makeLLLists(matrixExt, cache.sorted_cols)
 
-                @test cache.LLLeft == LLLeft
-                @test cache.LLRight == LLRight
+                @test cache.llleft == llleft
+                @test cache.llright == llright
             end
         end
 
@@ -376,17 +376,17 @@ module SortingCache2DTest
                     end
                 end
                 @test cache.matrix == matrixExt
-                @test matrixExt[:,cache.sortedCols] == matrixExt[:,sort]
+                @test matrixExt[:,cache.sorted_cols] == matrixExt[:,sort]
 
-                LLLeft, LLRight = _makeLLLists(matrixExt, cache.sortedCols)
+                llleft, llright = _makeLLLists(matrixExt, cache.sorted_cols)
 
-                @test cache.LLLeft == LLLeft
-                @test cache.LLRight == LLRight
+                @test cache.llleft == llleft
+                @test cache.llright == llright
             end
         end
 
 
-        @time @testset "__binSearchAscend! in 2Darray"  begin
+        @time @testset "__binsearch_ascend! in 2Darray"  begin
             for i in 1:1000
                 array = []
                 N = 10
@@ -400,18 +400,18 @@ module SortingCache2DTest
                     aDigits = aDigits[length(aDigits):-1:1] # println(array[i]); println(aDigits)
                     matrix[:,i] = aDigits
                 end
-                sortedAns = PhylogenyTree._radixSort(matrix, ascendDigit = false, base = 10) # print("sorted: ");println(array[sortedAns])
+                sortedAns = PhylogenyTree._radixsort(matrix, ascend_digit = false, base = 10) # print("sorted: ");println(array[sortedAns])
                 rmAt = rand(1:N)
                 col  = sortedAns[rmAt]
                 v    = matrix[:,col]; val  = array[col]
 
                 sorting = deepcopy(sortedAns)
                 deleteat!(sorting, rmAt) # print("rmed sorted: ");println(array[sorting]) # print("value: "); println(val)
-                insertAt = SortingCache2DType._binSearchAscend!(matrix, sorting, v, col)
+                insertAt = SortingCache2DType._binsearch_ascend!(matrix, sorting, v, col)
                 @test array[sorting] == array[sortedAns] # println(val) # println(array[sorting])
             end
         end
-        @time @testset "__binSearchDescend! in 2Darray"  begin
+        @time @testset "__binsearch_descend! in 2Darray"  begin
             for i in 1:1000
                 array = []
                 N = 10
@@ -425,14 +425,14 @@ module SortingCache2DTest
                     aDigits = aDigits[length(aDigits):-1:1] # println(array[i]); println(aDigits)
                     matrix[:,i] = aDigits
                 end
-                sortedAns = PhylogenyTree._radixSort(matrix, descend = true, ascendDigit = false, base = 10) # print("sorted: ");println(array[sortedAns])
+                sortedAns = PhylogenyTree._radixsort(matrix, descend = true, ascend_digit = false, base = 10) # print("sorted: ");println(array[sortedAns])
                 rmAt = rand(1:N)
                 col  = sortedAns[rmAt]
                 v    = matrix[:,col]; val  = array[col]
 
                 sorting = deepcopy(sortedAns)
                 deleteat!(sorting, rmAt) # print("rmed sorted: ");println(array[sorting]) # print("value: "); println(val)
-                insertAt = SortingCache2DType._binSearchDescend!(matrix, sorting, v, col)
+                insertAt = SortingCache2DType._binsearch_descend!(matrix, sorting, v, col)
                 @test array[sorting] == array[sortedAns] # println(val) # println(array[sorting])
             end
         end
@@ -520,7 +520,7 @@ module PhyloMatrixTest
     function _genRandomTree(D::I, N::I) where {I <: Integer}
         matrix = zeros(I, D, N)
         _makeTreeMatrixRandomly!(matrix, 1:D, 1:N)
-        sortedAns = PhylogenyTree._radixSort(matrix, descend = true, ascendDigit = false, base = 2)
+        sortedAns = PhylogenyTree._radixsort(matrix, descend = true, ascend_digit = false, base = 2)
         matrixExt = zeros(I, D, N+2)
         for r in 1:D;for c in 1:N;
             matrixExt[r,c+1] = matrix[r,c]
@@ -551,12 +551,12 @@ module PhyloMatrixTest
                 end
 
                 @test cache.matrix == matrixExt
-                @test matrixExt[:,cache.sortedCols] == matrixExt[:,sortedAns]
+                @test matrixExt[:,cache.sorted_cols] == matrixExt[:,sortedAns]
 
-                LLLeft, LLRight = SortingCache2DTest._makeLLLists(matrixExt, cache.sortedCols)
+                llleft, llright = SortingCache2DTest._makeLLLists(matrixExt, cache.sorted_cols)
 
-                @test cache.LLLeft == LLLeft
-                @test cache.LLRight == LLRight
+                @test cache.llleft == llleft
+                @test cache.llright == llright
             end
         end
 
@@ -576,28 +576,28 @@ module PhyloMatrixTest
                 end
 
                 @test phylo.cache.matrix == matrixExt
-                @test matrixExt[:,phylo.cache.sortedCols] == matrixExt[:,sortedAns]
+                @test matrixExt[:,phylo.cache.sorted_cols] == matrixExt[:,sortedAns]
 
-                LLLeft, LLRight = SortingCache2DTest._makeLLLists(matrixExt, phylo.cache.sortedCols)
+                llleft, llright = SortingCache2DTest._makeLLLists(matrixExt, phylo.cache.sorted_cols)
 
-                @test phylo.cache.LLLeft == LLLeft
-                @test phylo.cache.LLRight == LLRight
+                @test phylo.cache.llleft == llleft
+                @test phylo.cache.llright == llright
 
-                isTree::Bool = PhyloMatrixType.isTree(phylo)
-                if isTree != PhylogenyTree.isPhylogenic(phylo.cache.matrix[:, 2:(N+1)])
-                    println("LLLeft")
-                    println(LLLeft)
+                isTree::Bool = PhyloMatrixType.istree(phylo)
+                if isTree != PhylogenyTree.isphylogenic(phylo.cache.matrix[:, 2:(N+1)])
+                    println("llleft")
+                    println(llleft)
 
                     println("matrix")
-                    println(phylo.cache.sortedCols)
+                    println(phylo.cache.sorted_cols)
                     println(matrixExt)
-                    println(matrixExt[:, phylo.cache.sortedCols])
+                    println(matrixExt[:, phylo.cache.sorted_cols])
                     println(phylo.Ly)
                     for c in 1:N
                         println(matrixExt[:, c+1])
                     end
                 end
-                @test isTree == PhylogenyTree.isPhylogenic(phylo.cache.matrix[:, 2:(N+1)])
+                @test isTree == PhylogenyTree.isphylogenic(phylo.cache.matrix[:, 2:(N+1)])
             end
         end
 
@@ -619,8 +619,8 @@ module PhyloMatrixTest
 
                 PhyloMatrixType.rm!(phylo, N)
 
-                isTree::Bool = PhyloMatrixType.isTree(phylo)
-                @test isTree == PhylogenyTree.isPhylogenic(matrixExt[:, 2:N])
+                isTree::Bool = PhyloMatrixType.istree(phylo)
+                @test isTree == PhylogenyTree.isphylogenic(matrixExt[:, 2:N])
             end
         end
 
@@ -654,15 +654,15 @@ module PhyloMatrixTest
                 end
 
                 @test phylo.cache.matrix == matrixExt
-                @test matrixExt[:,phylo.cache.sortedCols] == matrixExt[:,sortedAns]
+                @test matrixExt[:,phylo.cache.sorted_cols] == matrixExt[:,sortedAns]
 
-                LLLeft, LLRight = SortingCache2DTest._makeLLLists(matrixExt, phylo.cache.sortedCols)
+                llleft, llright = SortingCache2DTest._makeLLLists(matrixExt, phylo.cache.sorted_cols)
 
-                @test phylo.cache.LLLeft == LLLeft
-                @test phylo.cache.LLRight == LLRight
+                @test phylo.cache.llleft == llleft
+                @test phylo.cache.llright == llright
 
-                isTree::Bool = PhyloMatrixType.isTree(phylo)
-                @test isTree == PhylogenyTree.isPhylogenic(phylo.cache.matrix[:, 2:(N+1)])
+                isTree::Bool = PhyloMatrixType.istree(phylo)
+                @test isTree == PhylogenyTree.isphylogenic(phylo.cache.matrix[:, 2:(N+1)])
             end
         end
         return nothing
@@ -730,10 +730,10 @@ module BuffPhyloMatrixTest
                     BuffPhyloMatrixType.add!(bPhylo, c, matrixExt[:, c+1])
                 end
 
-                @test matrixExt[:,bPhylo.phylo.cache.sortedCols] == matrixExt[:,sortedAns]
-                @test bPhylo.phylo.cache.matrix[:,bPhylo.phylo.cache.sortedCols] == bPhylo.phylo.cache.matrix[:,sortedAns]
-                isTree::Bool = BuffPhyloMatrixType.isTree(bPhylo)
-                @test isTree == PhylogenyTree.isPhylogenic(bPhylo.phylo.cache.matrix[:, 2:(N+1)])
+                @test matrixExt[:,bPhylo.phylo.cache.sorted_cols] == matrixExt[:,sortedAns]
+                @test bPhylo.phylo.cache.matrix[:,bPhylo.phylo.cache.sorted_cols] == bPhylo.phylo.cache.matrix[:,sortedAns]
+                isTree::Bool = BuffPhyloMatrixType.istree(bPhylo)
+                @test isTree == PhylogenyTree.isphylogenic(bPhylo.phylo.cache.matrix[:, 2:(N+1)])
             end
         end
         @time @testset "rm! BuffPhyloMat random"  begin
@@ -753,8 +753,8 @@ module BuffPhyloMatrixTest
                 end
 
                 BuffPhyloMatrixType.rm!(bPhylo, N)
-                isTree::Bool = BuffPhyloMatrixType.isTree(bPhylo)
-                @test isTree == PhylogenyTree.isPhylogenic(bPhylo.phylo.cache.matrix[:, 2:N])
+                isTree::Bool = BuffPhyloMatrixType.istree(bPhylo)
+                @test isTree == PhylogenyTree.isphylogenic(bPhylo.phylo.cache.matrix[:, 2:N])
             end
         end
         @time @testset "edit! BuffPhyloMat random"  begin
@@ -774,8 +774,8 @@ module BuffPhyloMatrixTest
                     end
                 end
 
-                isTree::Bool = BuffPhyloMatrixType.isTree(bPhylo)
-                @test isTree == PhylogenyTree.isPhylogenic(bPhylo.phylo.cache.matrix[:, 2:N])
+                isTree::Bool = BuffPhyloMatrixType.istree(bPhylo)
+                @test isTree == PhylogenyTree.isphylogenic(bPhylo.phylo.cache.matrix[:, 2:N])
             end
         end
 
@@ -794,21 +794,21 @@ module BuffPhyloMatrixTest
                 BL, usageSL, usageVL = _convertToBiCluster(matrixExt[:,(1+1):(1+N1)], width = width, height = height)
                 B,  usageS,  usageV  = _convertToBiCluster(matrixExt[:,(1+1):(1+N1+N2)], width = width, height = height)
 
-                bPhylo = BuffPhyloMatrixType.init(D * width, 1, bufferSize = (N1+N2) * height)
+                bPhylo = BuffPhyloMatrixType.init(D * width, 1, buffer_size = (N1+N2) * height)
 
                 BuffPhyloMatrixType.update!(bPhylo, B, usageS, usageV)
-                isTreeAns::Bool = BuffPhyloMatrixType.isTree(bPhylo)
-                @test isTreeAns == PhylogenyTree.isPhylogenic( matrixExt[:, 2:(N1+N2+1)] )
+                isTreeAns::Bool = BuffPhyloMatrixType.istree(bPhylo)
+                @test isTreeAns == PhylogenyTree.isphylogenic( matrixExt[:, 2:(N1+N2+1)] )
 
                 BuffPhyloMatrixType.update!(bPhylo, BL, usageSL, usageVL)
 
-                @test PhylogenyTree.isPhylogenic(matrixExt[:,(1+1):(1+N1)])
-                @test BuffPhyloMatrixType.isTree(bPhylo) == true
+                @test PhylogenyTree.isphylogenic(matrixExt[:,(1+1):(1+N1)])
+                @test BuffPhyloMatrixType.istree(bPhylo) == true
 
                 BuffPhyloMatrixType.update!(bPhylo, B, usageS, usageV)
-                isTree::Bool = BuffPhyloMatrixType.isTree(bPhylo)
+                isTree::Bool = BuffPhyloMatrixType.istree(bPhylo)
 
-                @test isTreeAns == PhylogenyTree.isPhylogenic(matrixExt[:, 2:(N1+N2+1)])
+                @test isTreeAns == PhylogenyTree.isphylogenic(matrixExt[:, 2:(N1+N2+1)])
                 @test isTreeAns == isTree
             end
         end
@@ -829,15 +829,15 @@ module BuffPhyloMatrixTest
                 B1, usageS1, usageV1 = _convertToBiCluster(matrixExt1[:,(1+1):(1+N)], width = width, height = height)
                 B2, usageS2, usageV2 = _convertToBiCluster(matrixExt2[:,(1+1):(1+N)], width = width, height = height)
 
-                bPhylo = BuffPhyloMatrixType.init(D * width, 1, bufferSize = (N) * height)
+                bPhylo = BuffPhyloMatrixType.init(D * width, 1, buffer_size = (N) * height)
 
                 BuffPhyloMatrixType.update!(bPhylo, B1, usageS1, usageV1)
-                isTree1::Bool = BuffPhyloMatrixType.isTree(bPhylo)
-                @test isTree1 == PhylogenyTree.isPhylogenic( matrixExt1[:, 2:(N+1)] )
+                isTree1::Bool = BuffPhyloMatrixType.istree(bPhylo)
+                @test isTree1 == PhylogenyTree.isphylogenic( matrixExt1[:, 2:(N+1)] )
 
                 BuffPhyloMatrixType.update!(bPhylo, B2, usageS2, usageV2)
-                isTree2::Bool = BuffPhyloMatrixType.isTree(bPhylo)
-                @test isTree2 == PhylogenyTree.isPhylogenic( matrixExt2[:, 2:(N+1)] )
+                isTree2::Bool = BuffPhyloMatrixType.istree(bPhylo)
+                @test isTree2 == PhylogenyTree.isphylogenic( matrixExt2[:, 2:(N+1)] )
             end
         end
 

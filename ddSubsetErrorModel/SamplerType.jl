@@ -705,13 +705,13 @@ module SamplerType
         # (debug) && (ln_q_prev += _ln_p_Link(samp.L_n, samp.usage_s, samp.s_s) )
         # (debug) && (ln_q_prev += _ln_p_b_y!(samp) )
 
-        prev_to::I = TableGraphType.getLink(samp.L_s, i)
+        prev_to::I = TableGraphType.getlink(samp.L_s, i)
         next_to::I = _sample_link(samp.L_s.W, i)
         s_pp::Set{I} = Set{I}([])
         s_pn::Set{I} = Set{I}([])
         s_np::Set{I} = Set{I}([])
         s_nn::Set{I} = Set{I}([])
-        TableGraphType.diffGroup!(samp.L_s, s_pp, s_pn, s_np, s_nn, i, prev_to, next_to, both = true)
+        TableGraphType.diffgroup!(samp.L_s, s_pp, s_pn, s_np, s_nn, i, prev_to, next_to, both = true)
         prev_L_n::TableGraph{I, R} = deepcopy(samp.L_n)
 
         prev_usage_s::Dict{I, Array{I, 1}} = deepcopy(samp.usage_s)
@@ -732,8 +732,8 @@ module SamplerType
         )
         acc_next::R = (R)(0.0)
         (# update to proposal state
-            TableGraphType.rmEdge!(samp.L_s, i, prev_to);
-            TableGraphType.addEdge!(samp.L_s, i, next_to);
+            TableGraphType.rmedge!(samp.L_s, i, prev_to);
+            TableGraphType.addedge!(samp.L_s, i, next_to);
             (removed::Array{I, 1}, added::Array{I, 1}) = _update_s_s_by_group_diff!(s_pp, s_pn, s_np, s_nn,
                                                                                         samp.usage_s, samp.unused_s, samp.s_s);
             err_m::Set{I} = Set{I}([]);
@@ -782,8 +782,8 @@ module SamplerType
         # )
 
         if rand() > acc_rate # rejected
-            TableGraphType.rmEdge!(samp.L_s, i, next_to)
-            TableGraphType.addEdge!(samp.L_s, i, prev_to)
+            TableGraphType.rmedge!(samp.L_s, i, next_to)
+            TableGraphType.addedge!(samp.L_s, i, prev_to)
             samp.L_n      = deepcopy(prev_L_n)
             samp.usage_n  = deepcopy(prev_usage_n)
             samp.unused_n = deepcopy(prev_unused_n)
@@ -847,11 +847,11 @@ module SamplerType
     # DONE: modify _sample_s_v!, _sample_b!, _sample_f!, _sample_z!
     # TODO: refactoring all sampler funciton to return ratio of ln_p_next / ln_p_prev
     function sample_map!(samp::Sampler{I, R};
-                        seed::I = (I)(0),
-                        iter::I = (I)(100000),
-                        thin::I = (I)(1),
-                        burnin::I = (I)(0),
-                        progressCount::I = (I)(100))::Tuple{Sampler{I, R}, Array{R, 1}} where {I <:Integer, R <: Real}
+                         seed::I = (I)(0),
+                         iter::I = (I)(100000),
+                         thin::I = (I)(1),
+                         burnin::I = (I)(0),
+                         progress_count::I = (I)(100))::Tuple{Sampler{I, R}, Array{R, 1}} where {I <:Integer, R <: Real}
         Random.seed!(seed)
         ln_p_v_true::Array{R, 1} = samp.param.ln_p_v
         map_state::Sampler{I,R} = deepcopy(samp)
@@ -894,7 +894,7 @@ module SamplerType
                     map_state = deepcopy(samp)
                 end
             end
-            if count % progressCount == 0
+            if count % progress_count == 0
                 println(count)
             end
         end
@@ -905,10 +905,10 @@ module SamplerType
     # DONE: modify _sample_s_v!, _sample_b!, _sample_f!, _sample_z!
     # return the (state of MAP, iterCount, ln_prob) with in this iterations
     function sample_all!(samp::Sampler{I, R};
-                        seed::I = (I)(0),
-                        iter::I = (I)(5000),
-                        thin::I = (I)(10),
-                        burnin::I = (I)(1000))::Array{Tuple{Sampler{I, R}, I}, 1} where {I <:Integer, R <: Real }
+                         seed::I = (I)(0),
+                         iter::I = (I)(5000),
+                         thin::I = (I)(10),
+                         burnin::I = (I)(1000))::Array{Tuple{Sampler{I, R}, I}, 1} where {I <:Integer, R <: Real }
         # setting the given random seed
         Random.seed!(seed)
         ln_p_v_true::Array{R, 1} = samp.param.ln_p_v
@@ -957,7 +957,7 @@ module SamplerType
     # DONE: Use different distance matix for L_s and L_n
     function init(err_score_path::String, pat_score_path::String, mat_score_path::String, param_path::String)
         ln_p_d::Array{REAL, 3}   = _parseData(err_score_path, pat_score_path, mat_score_path)
-        param::Parameters{INT,REAL}, anneal::Annealer{INT, REAL} = InputParser.parseConfigFile(param_path::String)
+        param::Parameters{INT,REAL}, anneal::Annealer{INT, REAL} = InputParser.parse_config_file(param_path::String)
         println("=========== data matrix ==========")
         println(ln_p_d)
         println("==================================")
@@ -968,11 +968,11 @@ module SamplerType
         Z::Array{INT, 2}   = convert.(INT, fill(1,S,M)) # init ℤ, Z[i,j] ∈ {1,2}, 1: error, 2: tumor
         H::Array{INT, 2}   = convert.(INT, fill(1,S,M)) # init H, H[i,j] ∈ {1,2}, 1: mat,   2: pat
 
-        D_s::Array{REAL, 2}  = DistanceParser.parseBFHammingDistance(err_score_path, pat_score_path, mat_score_path, param_path, "alpha_s")
-        decayfunction_s = DistanceParser.parseDecayFunction(param_path)
-        D_n::Array{REAL, 2}  = DistanceParser.parseBFHammingDistance(err_score_path, pat_score_path, mat_score_path, param_path, "alpha_n")
-        decayfunction_n = DistanceParser.parseDecayFunction(param_path, distanceTag = "distance",
-                                                            decayFunctionTag = "decayFunctionNest", decayRateTag = "decayRateNest")
+        D_s::Array{REAL, 2}  = DistanceParser.parse_bf_hamming_distance(err_score_path, pat_score_path, mat_score_path, param_path, "alpha_s")
+        decayfunction_s = DistanceParser.parse_decayfunction(param_path)
+        D_n::Array{REAL, 2}  = DistanceParser.parse_bf_hamming_distance(err_score_path, pat_score_path, mat_score_path, param_path, "alpha_n")
+        decayfunction_n = DistanceParser.parse_decayfunction(param_path, distance_tag = "distance",
+                                                             decay_function_tag = "decayFunctionNest", decay_rate_tag = "decayRateNest")
         for (i,j) in Iterators.product((INT)(1):S,(INT)(1):S)
             (i != j) && ( D_s[i,j] = decayfunction_s(D_s[i,j]))
             (i != j) && ( D_n[i,j] = decayfunction_n(D_n[i,j]))
@@ -1004,7 +1004,7 @@ module SamplerType
         B::Dict{Tuple{INT,INT},INT} = Dict{Tuple{INT,INT},INT}()
         for (s,m) in Iterators.product((INT)(1):S,(INT)(1):M); B[(s,m)] = 1; end
 
-        tree_cache::BuffPhyloMatrix{INT} = BuffPhyloMatrixType.init(S, M, bufferSize = M)
+        tree_cache::BuffPhyloMatrix{INT} = BuffPhyloMatrixType.init(S, M, buffer_size = M)
 
         samp::Sampler{INT, REAL} = Sampler{INT, REAL}(Z, H, L_s, L_n, s_s, s_n, s_v, usage_s, usage_n, usage_v, Set{INT}(), Set{INT}(), Set{INT}(),
                                                       a, f, g, u, p_err, er, Set{INT}(),  B, tree_cache, ln_p_d, param, anneal, (REAL)(0.0))
@@ -1012,16 +1012,16 @@ module SamplerType
         return samp
     end
 
-    function exec_map(err_scores::String, mat_scores::String, pat_scores::String, inifile::String;
-                     seed::I = (I)(0), iter::I = (I)(100000), thin::I = (I)(10), burnin::I = (I)(10)) where {I <: Integer}
-        samp = SamplerType.init(err_scores, mat_scores, pat_scores, inifile)
+    function exec_map(err_scores::String, mat_scores::String, pat_scores::String, ini_file::String;
+                      seed::I = (I)(0), iter::I = (I)(100000), thin::I = (I)(10), burnin::I = (I)(10)) where {I <: Integer}
+        samp = SamplerType.init(err_scores, mat_scores, pat_scores, ini_file)
         map, ln_probs = SamplerType.sample_map!(samp, seed = seed, iter = iter, thin = thin, burnin = burnin)
         return (map, ln_probs)
     end
 
 
-    function _ping_sampler(err_scores::String, mat_scores::String, pat_scores::String, inifile::String)
-        samp = SamplerType.init(err_scores, mat_scores, pat_scores, inifile)
+    function _ping_sampler(err_scores::String, mat_scores::String, pat_scores::String, ini_file::String)
+        samp = SamplerType.init(err_scores, mat_scores, pat_scores, ini_file)
         sampled = SamplerType.sample_all!(samp)
         return sampled
     end
@@ -1037,12 +1037,12 @@ module SamplerType
     # private funcitons
     #
     function _parseData(err_score_path::String,
-                       pat_score_path::String,
-                       mat_score_path::String)::Array{REAL, 3}
-        err_score::Array{REAL, 2} = InputParser.parseInputSummary(err_score_path)
-        mat_score::Array{REAL, 2} = InputParser.parseInputSummary(mat_score_path)
-        pat_score::Array{REAL, 2} = InputParser.parseInputSummary(pat_score_path)
-        # param::Parameters{REAL}  = InputParser.parseConfigFile(param_path)
+                        pat_score_path::String,
+                        mat_score_path::String)::Array{REAL, 3}
+        err_score::Array{REAL, 2} = InputParser.parse_input_summary(err_score_path)
+        mat_score::Array{REAL, 2} = InputParser.parse_input_summary(mat_score_path)
+        pat_score::Array{REAL, 2} = InputParser.parse_input_summary(pat_score_path)
+        # param::Parameters{REAL}  = InputParser.parse_config_file(param_path)
         S::INT, M::INT = size(err_score)
         ln_p::Array{REAL, 3} = convert.(REAL, zeros(S,M,3))
         for (s,m) in Iterators.product((INT)(1):S,(INT)(1):M)
@@ -1159,8 +1159,8 @@ module SamplerType
                              blocktype::I = (I)(1), debug = false)::Bool where {I <: Integer}
         BuffPhyloMatrixType.update!(tree_cache, B, usage_s, usage_v, blocktype = (I)(1))
         # (debug) && (print("erset: "); println(erset))
-        # (debug) && (print("isTree: "); println(BuffPhyloMatrixType.isTree(tree_cache)))
-        return (length(erset) == 0) || (!BuffPhyloMatrixType.isTree(tree_cache))
+        # (debug) && (print("istree: "); println(BuffPhyloMatrixType.istree(tree_cache)))
+        return (length(erset) == 0) || (!BuffPhyloMatrixType.istree(tree_cache))
     end
 
     function _is_main_valid(usage_s::Dict{I, Array{I,1}},
@@ -1446,8 +1446,8 @@ module SamplerType
             _exp_normalize!(ln_p)
             propose::I = usage_s[up_cluster][argmax( RandomUtil.sample_multinomial((I)(1), ln_p) )]
             for to in (I)(1):L.V
-                (to == propose) && (TableGraphType.addEdge!(L, v, to))
-                (to != propose) && (TableGraphType.rmEdge!(L, v, to))
+                (to == propose) && (TableGraphType.addedge!(L, v, to))
+                (to != propose) && (TableGraphType.rmedge!(L, v, to))
             end
         end
     end
@@ -1467,7 +1467,7 @@ module SamplerType
         for n in (I)(1):N
             if s_n[n] == (I)(0)
                 tempSet::Set{I} = Set{I}()
-                TableGraphType.DFS!(L, n, tempSet)
+                TableGraphType.dfs!(L, n, tempSet)
                 for nn in tempSet
                     s_n[nn] = c_now
                 end

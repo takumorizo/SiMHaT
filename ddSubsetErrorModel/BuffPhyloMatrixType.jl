@@ -5,91 +5,91 @@ module BuffPhyloMatrixType
 
     mutable struct BuffPhyloMatrix{I}
         phylo::PhyloMatrix{I}
-        colSize::I
-        bufferSize::I
-        bufferUsed::I
-        addedSetInBuffer::Set{I}
+        col_size::I
+        buffer_size::I
+        buffer_used::I
+        added_set_in_buffer::Set{I}
     end
     export BuffPhyloMatrix
 
     function init(R::I, C::I;
-                  descend::Bool = true, linkedValue::I = (I)(1),
-                  bufferSize::I = (I)(10)) where {I <: Integer}
-        phylo::PhyloMatrix{I} = PhyloMatrixType.init(R, C+bufferSize, descend = descend, linkedValue = linkedValue)
-        return BuffPhyloMatrix(phylo, C, bufferSize, (I)(0), Set{I}())
+                  descend::Bool = true, linked_value::I = (I)(1),
+                  buffer_size::I = (I)(10)) where {I <: Integer}
+        phylo::PhyloMatrix{I} = PhyloMatrixType.init(R, C+buffer_size, descend = descend, linked_value = linked_value)
+        return BuffPhyloMatrix(phylo, C, buffer_size, (I)(0), Set{I}())
     end
 
-    function novelIndex(buffPhylo::BuffPhyloMatrix{I})::I where {I <: Integer}
-        return buffPhylo.colSize + buffPhylo.bufferUsed + (I)(1)
+    function novel_index(buff_phylo::BuffPhyloMatrix{I})::I where {I <: Integer}
+        return buff_phylo.col_size + buff_phylo.buffer_used + (I)(1)
     end
 
-    function add!(buffPhylo::BuffPhyloMatrix{I}, col::I, v::AbstractArray{I,1})::Nothing where {I <: Integer}
-        @assert (I)(1) <= col <= buffPhylo.colSize
-        PhyloMatrixType.add!(buffPhylo.phylo, col, v)
+    function add!(buff_phylo::BuffPhyloMatrix{I}, col::I, v::AbstractArray{I,1})::Nothing where {I <: Integer}
+        @assert (I)(1) <= col <= buff_phylo.col_size
+        PhyloMatrixType.add!(buff_phylo.phylo, col, v)
         return nothing
     end
 
-    function rm!(buffPhylo::BuffPhyloMatrix{I}, col::I)::Nothing where {I <: Integer}
-        @assert (I)(1) <= col <= buffPhylo.colSize
-        PhyloMatrixType.rm!(buffPhylo.phylo, col)
+    function rm!(buff_phylo::BuffPhyloMatrix{I}, col::I)::Nothing where {I <: Integer}
+        @assert (I)(1) <= col <= buff_phylo.col_size
+        PhyloMatrixType.rm!(buff_phylo.phylo, col)
         return nothing
     end
 
-    function edit!(buffPhylo::BuffPhyloMatrix{I}, row::I, col::I, value::I)::Nothing where {I <: Integer}
-        @assert (I)(1) <= col <= buffPhylo.colSize
-        PhyloMatrixType.edit!(buffPhylo.phylo, row, col, value)
+    function edit!(buff_phylo::BuffPhyloMatrix{I}, row::I, col::I, value::I)::Nothing where {I <: Integer}
+        @assert (I)(1) <= col <= buff_phylo.col_size
+        PhyloMatrixType.edit!(buff_phylo.phylo, row, col, value)
         return nothing
     end
 
-    function isTree(buffPhylo::BuffPhyloMatrix{I})::Bool where {I <: Integer}
-        return PhyloMatrixType.isTree(buffPhylo.phylo)
+    function istree(buff_phylo::BuffPhyloMatrix{I})::Bool where {I <: Integer}
+        return PhyloMatrixType.istree(buff_phylo.phylo)
     end
 
-    function push!(buffPhylo::BuffPhyloMatrix{I}, v::AbstractArray{I,1})::Nothing where {I <: Integer}
-        @assert buffPhylo.bufferUsed < buffPhylo.bufferSize
-        nextIndex::I = novelIndex(buffPhylo)
-        Base.push!(buffPhylo.addedSetInBuffer, _binaryArrayToInt(v))
-        buffPhylo.bufferUsed += (I)(1)
-        PhyloMatrixType.add!(buffPhylo.phylo, nextIndex, v)
+    function push!(buff_phylo::BuffPhyloMatrix{I}, v::AbstractArray{I,1})::Nothing where {I <: Integer}
+        @assert buff_phylo.buffer_used < buff_phylo.buffer_size
+        nextIndex::I = novel_index(buff_phylo)
+        Base.push!(buff_phylo.added_set_in_buffer, _binaryarray_to_int(v))
+        buff_phylo.buffer_used += (I)(1)
+        PhyloMatrixType.add!(buff_phylo.phylo, nextIndex, v)
         return nothing
     end
 
-    function pop!(buffPhylo::BuffPhyloMatrix{I})::Nothing where {I <: Integer}
-        if buffPhylo.bufferUsed > 0
-            rmIndex::I = novelIndex(buffPhylo) - (I)(1)
-            Base.pop!(buffPhylo.addedSetInBuffer, _binaryArrayToInt(view(buffPhylo.phylo.cache.matrix, : , rmIndex + 1 )))
-            buffPhylo.bufferUsed -= (I)(1)
-            PhyloMatrixType.rm!(buffPhylo.phylo, rmIndex)
+    function pop!(buff_phylo::BuffPhyloMatrix{I})::Nothing where {I <: Integer}
+        if buff_phylo.buffer_used > 0
+            rmIndex::I = novel_index(buff_phylo) - (I)(1)
+            Base.pop!(buff_phylo.added_set_in_buffer, _binaryarray_to_int(view(buff_phylo.phylo.cache.matrix, : , rmIndex + 1 )))
+            buff_phylo.buffer_used -= (I)(1)
+            PhyloMatrixType.rm!(buff_phylo.phylo, rmIndex)
         end
         return nothing
     end
 
-    function clearBuffer!(buffPhylo::BuffPhyloMatrix{I})::Nothing where {I <: Integer}
-        while buffPhylo.bufferUsed > 0
-            pop!(buffPhylo)
+    function clearbuffer!(buff_phylo::BuffPhyloMatrix{I})::Nothing where {I <: Integer}
+        while buff_phylo.buffer_used > 0
+            pop!(buff_phylo)
         end
         return nothing
     end
 
-    function update!(buffPhylo::BuffPhyloMatrix{I},
+    function update!(buff_phylo::BuffPhyloMatrix{I},
                      B::Dict{Tuple{I,I}, I},
-                     usageS::Dict{I,Array{I,1}},
-                     usageV::Dict{I,Array{I,1}};
+                     usage_s::Dict{I,Array{I,1}},
+                     usage_v::Dict{I,Array{I,1}};
                      blocktype::I = (I)(1))::Nothing where {I <: Integer}
-        R::I = buffPhylo.phylo.cache.R
-        setNext::Set{I} = _summaryBits(B, usageS, usageV, R,
+        R::I = buff_phylo.phylo.cache.R
+        setNext::Set{I} = _summarybits(B, usage_s, usage_v, R,
                                                         blocktype = blocktype)
-        prevDiff::Set{I} = setdiff(buffPhylo.addedSetInBuffer, setNext)
-        nextDiff::Set{I} = setdiff(setNext, buffPhylo.addedSetInBuffer)
+        prevDiff::Set{I} = setdiff(buff_phylo.added_set_in_buffer, setNext)
+        nextDiff::Set{I} = setdiff(setNext, buff_phylo.added_set_in_buffer)
 
         if length(prevDiff) > 0
-            clearBuffer!(buffPhylo)
+            clearbuffer!(buff_phylo)
             for num in setNext
-                push!(buffPhylo, _intToBinaryArray(num, R))
+                push!(buff_phylo, _int_to_binaryarray(num, R))
             end
         elseif length(nextDiff) > 0
             for num in nextDiff
-                push!(buffPhylo, _intToBinaryArray(num, R))
+                push!(buff_phylo, _int_to_binaryarray(num, R))
             end
         elseif length(prevDiff) == 0 && length(nextDiff) == 0
             # do nothing
@@ -97,7 +97,7 @@ module BuffPhyloMatrixType
         return nothing
     end
 
-    function _binaryArrayToInt(v::AbstractArray{I,1}; ascend::Bool = true)::I where {I <: Integer}
+    function _binaryarray_to_int(v::AbstractArray{I,1}; ascend::Bool = true)::I where {I <: Integer}
         ans::I = (I)(0)
         for i in (I)(1):length(v)
             digit::I = (ascend) * (i-1) + (!ascend) * (length(v) - i)
@@ -106,8 +106,8 @@ module BuffPhyloMatrixType
         return ans
     end
 
-    function _intToBinaryArray(num::I, vectorSize::I; ascend::Bool = true)::Array{I, 1} where {I <: Integer}
-        v::Array{I, 1} = digits(typeof(num), num, base=(I)(2), pad=(Int)(vectorSize))
+    function _int_to_binaryarray(num::I, vector_size::I; ascend::Bool = true)::Array{I, 1} where {I <: Integer}
+        v::Array{I, 1} = digits(typeof(num), num, base=(I)(2), pad=(Int)(vector_size))
         # The reason for 'pad' to be typed as ::Int is the inner implementations of intfuncs.jl.
         # This should be fixed in the later versions of julia...
         if !ascend
@@ -116,19 +116,19 @@ module BuffPhyloMatrixType
         return v
     end
 
-    function _summaryBits(B::Dict{Tuple{I,I}, I}, usageS::Dict{I,Array{I,1}},
-                         usageV::Dict{I,Array{I,1}},
-                         vectorSize::I;
-                         blocktype::I = (I)(1))::Set{I} where {I <: Integer}
+    function _summarybits(B::Dict{Tuple{I,I}, I}, usage_s::Dict{I,Array{I,1}},
+                          usage_v::Dict{I,Array{I,1}},
+                          vector_size::I;
+                          blocktype::I = (I)(1))::Set{I} where {I <: Integer}
         ans::Set{I} = Set{I}()
-        for m in keys(usageV)
-            v::Array{I,1} = zeros(I, vectorSize)
-            for c in keys(usageS)
+        for m in keys(usage_v)
+            v::Array{I,1} = zeros(I, vector_size)
+            for c in keys(usage_s)
                 if B[(c,m)] == blocktype
-                    v[usageS[c]] .= (I)(1)
+                    v[usage_s[c]] .= (I)(1)
                 end
             end
-            Base.push!(ans, _binaryArrayToInt(v))
+            Base.push!(ans, _binaryarray_to_int(v))
         end
         return ans
     end

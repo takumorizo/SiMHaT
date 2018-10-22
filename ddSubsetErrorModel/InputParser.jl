@@ -33,8 +33,8 @@ module InputParser
         ln_p_v::Array{R, 1} # error block state penalty, [prob_valid, prob_invalid]
     end
 
-    function parseConfigFile(configFile::String)::Tuple{Parameters{INT, REAL}, Annealer{INT, REAL}}
-        conf = ConfParse(configFile)
+    function parse_config_file(config_file::String)::Tuple{Parameters{INT, REAL}, Annealer{INT, REAL}}
+        conf = ConfParse(config_file)
         parse_conf!(conf)
         println(conf)
         α_s   = parse(REAL, String(retrieve(conf, "model", "alpha_s")) )
@@ -86,10 +86,10 @@ module InputParser
                Annealer{INT, REAL}(period, ln_p_ladders))
     end
 
-    function parseInputSummary(summaryPath::String)::Array{REAL, 2}
+    function parse_input_summary(summary_path::String)::Array{REAL, 2}
         ans = []
         isFirst = true
-        open(summaryPath, "r") do f
+        open(summary_path, "r") do f
             for line::String in eachline(f)
                 if isFirst
                     line = strip(line)

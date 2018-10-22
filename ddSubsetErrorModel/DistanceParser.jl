@@ -5,19 +5,19 @@ module DistanceParser
     using ..config
     using ..InputParser
     using ConfParser
-    function parseBFHammingDistance(errScorePath::String,
-                                    patScorePath::String,
-                                    matScorePath::String,
-                                    paramFilePath::String,
-                                    alphaName::String)::Array{REAL, 2}
-        errScore::Array{REAL, 2} = InputParser.parseInputSummary(errScorePath)
-        matScore::Array{REAL, 2} = InputParser.parseInputSummary(matScorePath)
-        patScore::Array{REAL, 2} = InputParser.parseInputSummary(patScorePath)
+    function parse_bf_hamming_distance(err_score_path::String,
+                                       pat_score_path::String,
+                                       mat_score_path::String,
+                                       param_file_path::String,
+                                       alpha_name::String)::Array{REAL, 2}
+        errScore::Array{REAL, 2} = InputParser.parse_input_summary(err_score_path)
+        matScore::Array{REAL, 2} = InputParser.parse_input_summary(mat_score_path)
+        patScore::Array{REAL, 2} = InputParser.parse_input_summary(pat_score_path)
 
-        conf = ConfParse(paramFilePath)
+        conf = ConfParse(param_file_path)
         parse_conf!(conf)
         BFThreshold::REAL = parse(REAL, String(retrieve(conf, "distance", "BFThreshold")))
-        alpha::REAL       = parse(REAL, String(retrieve(conf, "distance", alphaName)) )
+        alpha::REAL       = parse(REAL, String(retrieve(conf, "distance", alpha_name)) )
 
         S::INT, M::INT = size(errScore)
         BFPat::Array{REAL, 2} = patScore .- errScore
@@ -45,19 +45,19 @@ module DistanceParser
        return ans
     end
 
-    function parsePhysicalDistance(distanceFilePath::String)::Array{REAL, 2}
-        distanceMatrix::Array{REAL, 2} = InputParser.parseInputSummary(distanceFilePath)
+    function parse_physical_distance(distance_file_path::String)::Array{REAL, 2}
+        distanceMatrix::Array{REAL, 2} = InputParser.parse_input_summary(distance_file_path)
         return distanceMatrix
     end
 
-    function parseDecayFunction(paramFilePath::String;
-                                distanceTag::String      = "distance",
-                                decayFunctionTag::String = "decayFunction",
-                                decayRateTag::String     = "decayRate")
-        conf = ConfParse(paramFilePath)
+    function parse_decayfunction(param_file_path::String;
+                                 distance_tag::String       = "distance",
+                                 decay_function_tag::String = "decayFunction",
+                                 decay_rate_tag::String     = "decayRate")
+        conf = ConfParse(param_file_path)
         parse_conf!(conf)
-        functionType::String = String(retrieve(conf, distanceTag, decayFunctionTag))
-        a::REAL      = parse(REAL, String(retrieve(conf, distanceTag, decayRateTag)))
+        functionType::String = String(retrieve(conf, distance_tag, decay_function_tag))
+        a::REAL      = parse(REAL, String(retrieve(conf, distance_tag, decay_rate_tag)))
         if      functionType == "Exponential"
             return x->(REAL)(exp(-1.0 * x / a))
         elseif  functionType == "Sigmoid"

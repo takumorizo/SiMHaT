@@ -12,9 +12,9 @@ module PhyloMatrixType
     export PhyloMatrix
 
     function init(R::I, C::I;
-                  descend::Bool = true, linkedValue::I = (I)(1)) where {I <: Integer}
+                  descend::Bool = true, linked_value::I = (I)(1)) where {I <: Integer}
         cache::SortingCache2D{I} = SortingCache2DType.init(R, C,
-                                                       descend = descend, linkedValue = linkedValue)
+                                                           descend = descend, linked_value = linked_value)
         Ly::Array{Bool, 1}  = ones(Bool, C+(I)(2))
         Lmin::Array{I, 1}   = ones(I, C+(I)(2))
 
@@ -22,47 +22,47 @@ module PhyloMatrixType
     end
 
     function add!(phylo::PhyloMatrix{I}, col::I, v::AbstractArray{I,1};
-                  updateLy::Bool = true)::Nothing where {I <: Integer}
+                  update_Ly::Bool = true)::Nothing where {I <: Integer}
         privateCol::I = SortingCache2DType.at(phylo.cache, col)
-        @assert privateCol ∉ phylo.cache.sortedCols && ((I)(1) <= col <= phylo.cache.C)
-        addAt::I = SortingCache2DType._binSearch!(phylo.cache.matrix, phylo.cache.sortedCols,
-                                               v, privateCol, phylo.cache.descend)
-        LyUpdates::Array{I,1} =  SortingCache2DType._addLinkedList!(phylo.cache.matrix,
-                                                                 phylo.cache.LLLeft, phylo.cache.LLRight,
-                                                                 phylo.cache.sortedCols, addAt)
-        if updateLy
-            _updateL!(phylo.cache, phylo.Ly, phylo.Lmin, LyUpdates)
+        @assert privateCol ∉ phylo.cache.sorted_cols && ((I)(1) <= col <= phylo.cache.C)
+        addAt::I = SortingCache2DType._binsearch!(phylo.cache.matrix, phylo.cache.sorted_cols,
+                                                  v, privateCol, phylo.cache.descend)
+        Ly_update_list::Array{I,1} =  SortingCache2DType._addlinkedlist!(phylo.cache.matrix,
+                                                                         phylo.cache.llleft, phylo.cache.llright,
+                                                                         phylo.cache.sorted_cols, addAt)
+        if update_Ly
+            _updatel!(phylo.cache, phylo.Ly, phylo.Lmin, Ly_update_list)
         end
         return nothing
         # println("add!")
-        # println(phylo.cache.sortedCols)
-        # println(phylo.cache.matrix[:, phylo.cache.sortedCols])
-        # println(phylo.cache.LLLeft)
-        # println(LyUpdates)
+        # println(phylo.cache.sorted_cols)
+        # println(phylo.cache.matrix[:, phylo.cache.sorted_cols])
+        # println(phylo.cache.llleft)
+        # println(Ly_update_list)
         # println(phylo.Ly)
         # println(phylo.Lmin)
     end
 
-    function rm!(phylo::PhyloMatrix{I}, col::I; updateLy::Bool = true)::Nothing where {I <: Integer}
+    function rm!(phylo::PhyloMatrix{I}, col::I; update_Ly::Bool = true)::Nothing where {I <: Integer}
         privateCol::I = SortingCache2DType.at(phylo.cache, col)
-        @assert privateCol ∈ phylo.cache.sortedCols && ((I)(1) <= col <= phylo.cache.C)
-        # rmAt::I = findfirst(phylo.cache.sortedCols, privateCol)
-        rmAt::I = something(findfirst(isequal(privateCol), phylo.cache.sortedCols), 0)
-        LyUpdates::Array{I,1} = SortingCache2DType._rmLinkedList!(phylo.cache.matrix,
-                                                               phylo.cache.LLLeft,
-                                                               phylo.cache.LLRight,
-                                                               phylo.cache.sortedCols, rmAt)
-        deleteat!(phylo.cache.sortedCols, something(findfirst(isequal(privateCol), phylo.cache.sortedCols), 0))
-        # deleteat!(phylo.cache.sortedCols, findfirst(phylo.cache.sortedCols, privateCol))
-        if updateLy
-            _updateL!(phylo.cache, phylo.Ly, phylo.Lmin, LyUpdates)
+        @assert privateCol ∈ phylo.cache.sorted_cols && ((I)(1) <= col <= phylo.cache.C)
+        # rmAt::I = findfirst(phylo.cache.sorted_cols, privateCol)
+        rmAt::I = something(findfirst(isequal(privateCol), phylo.cache.sorted_cols), 0)
+        Ly_update_list::Array{I,1} = SortingCache2DType._rmlinkedlist!(phylo.cache.matrix,
+                                                                       phylo.cache.llleft,
+                                                                       phylo.cache.llright,
+                                                                       phylo.cache.sorted_cols, rmAt)
+        deleteat!(phylo.cache.sorted_cols, something(findfirst(isequal(privateCol), phylo.cache.sorted_cols), 0))
+        # deleteat!(phylo.cache.sorted_cols, findfirst(phylo.cache.sorted_cols, privateCol))
+        if update_Ly
+            _updatel!(phylo.cache, phylo.Ly, phylo.Lmin, Ly_update_list)
         end
         return nothing
     end
 
     function edit!(phylo::PhyloMatrix{I}, row::I, col::I, value::I)::Nothing where {I <: Integer}
         privateCol::I = SortingCache2DType.at(phylo.cache, col)
-        isIn::Bool = (privateCol ∈ phylo.cache.sortedCols)
+        isIn::Bool = (privateCol ∈ phylo.cache.sorted_cols)
         if isIn && value == phylo.cache.matrix[row, privateCol]
             # println("ignore edit")
             return nothing
@@ -70,39 +70,39 @@ module PhyloMatrixType
             # println("start edit")
             v::Array{I,1} = deepcopy(phylo.cache.matrix[:, privateCol])
             v[row] = value
-            (isIn) && rm!(phylo, col, updateLy = true)
-            add!(phylo, col, v, updateLy = true)
+            (isIn) && rm!(phylo, col, update_Ly = true)
+            add!(phylo, col, v, update_Ly = true)
             return nothing
         end
 
         # v::Array{I,1} = deepcopy(phylo.cache.matrix[:, privateCol])
         # v[row] = value
-        # if privateCol ∈ phylo.cache.sortedCols
-        #     rm!(phylo, col, updateLy = false)
+        # if privateCol ∈ phylo.cache.sorted_cols
+        #     rm!(phylo, col, update_Ly = false)
         # end
-        # add!(phylo, col, v, updateLy = false)
-        # updateLy::Array{I,1} = [ privateCol ]
-        # (value == phylo.cache.linkedValue) && push!(updateLy, phylo.cache.LLRight[row, privateCol])
-        # _updateL!(phylo.cache, phylo.Ly, phylo.Lmin, updateLy)
+        # add!(phylo, col, v, update_Ly = false)
+        # update_Ly::Array{I,1} = [ privateCol ]
+        # (value == phylo.cache.linked_value) && push!(update_Ly, phylo.cache.llright[row, privateCol])
+        # _updatel!(phylo.cache, phylo.Ly, phylo.Lmin, update_Ly)
         # return nothing
     end
 
-    function isTree(phylo::PhyloMatrix{I})::Bool where {I <: Integer}
+    function istree(phylo::PhyloMatrix{I})::Bool where {I <: Integer}
         return mapreduce(x->x, &, phylo.Ly)
     end
 
-    function _updateL!(cache::SortingCache2D{I}, Ly::Array{Bool,1}, Lmin::Array{I,1}, LyUpdates::Array{I,1};
-                     linkedValue::I = (I)(1))::Nothing where {I <: Integer}
-        for c in LyUpdates
+    function _updatel!(cache::SortingCache2D{I}, Ly::Array{Bool,1}, Lmin::Array{I,1}, Ly_update_list::Array{I,1};
+                       linked_value::I = (I)(1))::Nothing where {I <: Integer}
+        for c in Ly_update_list
             Lmin[c] = cache.C + (I)(2)
             Ly[c] = true
             for r in (I)(1):cache.R
-                if cache.matrix[r, c] == linkedValue
-                    if Lmin[c] != (cache.C + (I)(2)) && Lmin[c] != cache.LLLeft[r,c]
+                if cache.matrix[r, c] == linked_value
+                    if Lmin[c] != (cache.C + (I)(2)) && Lmin[c] != cache.llleft[r,c]
                         Ly[c] = false
                         break
                     end
-                    Lmin[c] = min(Lmin[c],cache.LLLeft[r,c])
+                    Lmin[c] = min(Lmin[c],cache.llleft[r,c])
                 end
             end
         end

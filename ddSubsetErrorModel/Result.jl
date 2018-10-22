@@ -39,19 +39,19 @@ module Result
     #= TODO:
     smax.usage_s -> smax.usage_s^(1)
     =#
-    function viewmap(smax, lnprobs, outputDir::String)
+    function viewmap(smax, lnprobs, output_dir::String)
         pyplot()
         iters = collect(1:length(lnprobs))
         plot(iters, lnprobs, size=(2000,2000))
-        savefig(outputDir * "/lnprobs.png")
+        savefig(output_dir * "/lnprobs.png")
 
         acf = _acf(lnprobs)
         bar(acf)
-        savefig(outputDir * "/acf.png")
+        savefig(output_dir * "/acf.png")
 
         println("isValid state")
         println(SamplerType.isvalid(smax, debug = true))
-        mat, rbreak, sortR, cbreak, sortC = _sort_biclustermatrix(smax.Z, smax.usage_s, smax.usage_v, smax.B)
+        mat, rbreak, sort_r, cbreak, sort_c = _sort_biclustermatrix(smax.Z, smax.usage_s, smax.usage_v, smax.B)
 
         # println("MAP, B")
         # println(smax.B)
@@ -62,32 +62,32 @@ module Result
         # println(typeof(smax.treeCache) <: BuffPhyloMatrix{Int64})
         # isTree(smax.treeCache)
 
-        _view_matrix_heatmap(mat, rbreak, sortR, cbreak, sortC, "MAP.Z", filePath = outputDir * "/MAP_Z.png")
-        _view_matrix_heatmap(smax.ln_p_data[sortR,sortC,1], rbreak, sortR, cbreak, sortC, "err", filePath = outputDir * "/err.png")
-        _view_matrix_heatmap(smax.ln_p_data[sortR,sortC,2], rbreak, sortR, cbreak, sortC, "mat", filePath = outputDir * "/mat.png")
-        _view_matrix_heatmap(smax.ln_p_data[sortR,sortC,3], rbreak, sortR, cbreak, sortC, "pat", filePath = outputDir * "/pat.png")
+        _view_matrix_heatmap(mat, rbreak, sort_r, cbreak, sort_c, "MAP.Z", file_path = output_dir * "/MAP_Z.png")
+        _view_matrix_heatmap(smax.ln_p_data[sort_r,sort_c,1], rbreak, sort_r, cbreak, sort_c, "err", file_path = output_dir * "/err.png")
+        _view_matrix_heatmap(smax.ln_p_data[sort_r,sort_c,2], rbreak, sort_r, cbreak, sort_c, "mat", file_path = output_dir * "/mat.png")
+        _view_matrix_heatmap(smax.ln_p_data[sort_r,sort_c,3], rbreak, sort_r, cbreak, sort_c, "pat", file_path = output_dir * "/pat.png")
 
-        _view_matrix_heatmap(smax.ln_p_data[:,:,1], rbreak, sortR, cbreak, sortC, "err", filePath = outputDir * "/err.nonSort.png")
-        _view_matrix_heatmap(smax.ln_p_data[:,:,2], rbreak, sortR, cbreak, sortC, "mat", filePath = outputDir * "/mat.nonSort.png")
-        _view_matrix_heatmap(smax.ln_p_data[:,:,3], rbreak, sortR, cbreak, sortC, "pat", filePath = outputDir * "/pat.nonSort.png")
-        _view_matrix_heatmap(smax.H[sortR,sortC], rbreak, sortR, cbreak, sortC, "MAP.H", filePath = outputDir * "/MAP_H.png", clim = [1,2])
-        _view_f_heatmap(smax.f, smax.usage_s, rbreak, sortR, smax.usage_v, cbreak, sortC, "MAP.f", filePath = outputDir * "/MAP_f.png")
-        _view_u_heatmap(smax.u, smax.usage_s, rbreak, sortR, smax.usage_v, cbreak, sortC, "MAP.u", filePath = outputDir * "/MAP_u.png")
-        _view_a_heatmap(smax.a, smax.usage_s, rbreak, sortR, smax.usage_v, cbreak, sortC, "MAP.a", filePath = outputDir * "/MAP_a.png")
-        _view_blocktype_heatmap(smax.B, smax.usage_s, rbreak, sortR, smax.usage_v, cbreak, sortC, "MAP.B", filePath = outputDir * "/MAP_B.png")
+        _view_matrix_heatmap(smax.ln_p_data[:,:,1], rbreak, sort_r, cbreak, sort_c, "err", file_path = output_dir * "/err.nonSort.png")
+        _view_matrix_heatmap(smax.ln_p_data[:,:,2], rbreak, sort_r, cbreak, sort_c, "mat", file_path = output_dir * "/mat.nonSort.png")
+        _view_matrix_heatmap(smax.ln_p_data[:,:,3], rbreak, sort_r, cbreak, sort_c, "pat", file_path = output_dir * "/pat.nonSort.png")
+        _view_matrix_heatmap(smax.H[sort_r,sort_c], rbreak, sort_r, cbreak, sort_c, "MAP.H", file_path = output_dir * "/MAP_H.png", clim = [1,2])
+        _view_f_heatmap(smax.f, smax.usage_s, rbreak, sort_r, smax.usage_v, cbreak, sort_c, "MAP.f", file_path = output_dir * "/MAP_f.png")
+        _view_u_heatmap(smax.u, smax.usage_s, rbreak, sort_r, smax.usage_v, cbreak, sort_c, "MAP.u", file_path = output_dir * "/MAP_u.png")
+        _view_a_heatmap(smax.a, smax.usage_s, rbreak, sort_r, smax.usage_v, cbreak, sort_c, "MAP.a", file_path = output_dir * "/MAP_a.png")
+        _view_blocktype_heatmap(smax.B, smax.usage_s, rbreak, sort_r, smax.usage_v, cbreak, sort_c, "MAP.B", file_path = output_dir * "/MAP_B.png")
     end
 
-    function viewdata(sampled, outputDir::String)
+    function viewdata(sampled, output_dir::String)
         pyplot()
 
         cutoff = 200
         lnprobs = []; iters   = []; for (s,c) in sampled; push!(lnprobs, s.lnProb); push!(iters, c); end; plot(iters[cutoff:length(iters)], lnprobs[cutoff:length(iters)], size=(2000,2000))
-        savefig(outputDir * "/lnprobs.png")
+        savefig(output_dir * "/lnprobs.png")
 
         smax = _get_mapstate(sampled)
         println("isValid state")
         println(SamplerType.isvalid(smax, debug = true))
-        mat, rbreak, sortR, cbreak, sortC = _sort_biclustermatrix(smax.Z, smax.usage_s, smax.usage_v)
+        mat, rbreak, sort_r, cbreak, sort_c = _sort_biclustermatrix(smax.Z, smax.usage_s, smax.usage_v)
 
         # println("MAP, B")
         # println(smax.B)
@@ -98,45 +98,45 @@ module Result
         # println(typeof(smax.treeCache) <: BuffPhyloMatrix{Int64})
         # isTree(smax.treeCache)
 
-        _view_matrix_heatmap(mat, rbreak, sortR, cbreak, sortC, "MAP.Z", filePath = outputDir * "/MAP_Z.png")
-        _view_matrix_heatmap(smax.ln_p_data[sortR,sortC,1], rbreak, sortR, cbreak, sortC, "err", filePath = outputDir * "/err.png")
-        _view_matrix_heatmap(smax.ln_p_data[sortR,sortC,2], rbreak, sortR, cbreak, sortC, "mat", filePath = outputDir * "/mat.png")
-        _view_matrix_heatmap(smax.ln_p_data[sortR,sortC,3], rbreak, sortR, cbreak, sortC, "pat", filePath = outputDir * "/pat.png")
+        _view_matrix_heatmap(mat, rbreak, sort_r, cbreak, sort_c, "MAP.Z", file_path = output_dir * "/MAP_Z.png")
+        _view_matrix_heatmap(smax.ln_p_data[sort_r,sort_c,1], rbreak, sort_r, cbreak, sort_c, "err", file_path = output_dir * "/err.png")
+        _view_matrix_heatmap(smax.ln_p_data[sort_r,sort_c,2], rbreak, sort_r, cbreak, sort_c, "mat", file_path = output_dir * "/mat.png")
+        _view_matrix_heatmap(smax.ln_p_data[sort_r,sort_c,3], rbreak, sort_r, cbreak, sort_c, "pat", file_path = output_dir * "/pat.png")
 
-        _view_matrix_heatmap(smax.H, rbreak, sortR, cbreak, sortC, "MAP.H", filePath = outputDir * "/MAP_H.png", clim = [1,2])
-        _view_f_heatmap(smax.f, smax.usage_s, rbreak, sortR, smax.usage_v, cbreak, sortC, "MAP.f", filePath = outputDir * "/MAP_f.png")
-        _view_u_heatmap(smax.u, smax.usage_s, rbreak, sortR, smax.usage_v, cbreak, sortC, "MAP.u", filePath = outputDir * "/MAP_u.png")
-        _view_a_heatmap(smax.a, smax.usage_s, rbreak, sortR, smax.usage_v, cbreak, sortC, "MAP.a", filePath = outputDir * "/MAP_a.png")
-        _view_blocktype_heatmap(smax.B, smax.usage_s, rbreak, sortR, smax.usage_v, cbreak, sortC, "MAP.B", filePath = outputDir * "/MAP_B.png")
+        _view_matrix_heatmap(smax.H, rbreak, sort_r, cbreak, sort_c, "MAP.H", file_path = output_dir * "/MAP_H.png", clim = [1,2])
+        _view_f_heatmap(smax.f, smax.usage_s, rbreak, sort_r, smax.usage_v, cbreak, sort_c, "MAP.f", file_path = output_dir * "/MAP_f.png")
+        _view_u_heatmap(smax.u, smax.usage_s, rbreak, sort_r, smax.usage_v, cbreak, sort_c, "MAP.u", file_path = output_dir * "/MAP_u.png")
+        _view_a_heatmap(smax.a, smax.usage_s, rbreak, sort_r, smax.usage_v, cbreak, sort_c, "MAP.a", file_path = output_dir * "/MAP_a.png")
+        _view_blocktype_heatmap(smax.B, smax.usage_s, rbreak, sort_r, smax.usage_v, cbreak, sort_c, "MAP.B", file_path = output_dir * "/MAP_B.png")
     end
 
-    function evaluatefvalue(summaryPath::String, scorePath::String, thres::REAL = (REAL)(0.0), rmError::Bool = true)::Tuple{REAL,REAL,REAL}
-        if endswith(scorePath, "jld2")
-            sampled::Sampler{INT, REAL}, lnprobs::Array{REAL, 1} = readjld(scorePath)
-            return _evaluatefvalue(summaryPath, sampled, thres, rmError)
+    function evaluatefvalue(summary_path::String, score_path::String, thres::REAL = (REAL)(0.0), rm_error::Bool = true)::Tuple{REAL,REAL,REAL}
+        if endswith(score_path, "jld2")
+            sampled::Sampler{INT, REAL}, lnprobs::Array{REAL, 1} = readjld(score_path)
+            return _evaluatefvalue(summary_path, sampled, thres, rm_error)
         else
-            score::Array{REAL, 2}       = InputParser.parseInputSummary(scorePath)
-            return _evaluatefvalue(summaryPath, score, thres)
+            score::Array{REAL, 2}       = InputParser.parse_input_summary(score_path)
+            return _evaluatefvalue(summary_path, score, thres)
         end
     end
 
-    function savefvalue(outputPath::String, prescision::REAL, recall::REAL, fvalue::REAL, tag::String)
-        @assert endswith(outputPath, "jld2")
-        if isfile(outputPath)
-            println(load(outputPath))
-            precisions::Dict{String, REAL} = load(outputPath, "precisions")
-            recalls::Dict{String, REAL}    = load(outputPath, "recalls")
-            fvalues::Dict{String, REAL}    = load(outputPath, "fvalues")
+    function savefvalue(output_path::String, prescision::REAL, recall::REAL, fvalue::REAL, tag::String)
+        @assert endswith(output_path, "jld2")
+        if isfile(output_path)
+            println(load(output_path))
+            precisions::Dict{String, REAL} = load(output_path, "precisions")
+            recalls::Dict{String, REAL}    = load(output_path, "recalls")
+            fvalues::Dict{String, REAL}    = load(output_path, "fvalues")
             precisions[tag] = prescision
             recalls[tag]    = recall
             fvalues[tag]    = fvalue
-            # precisions::Dict{String, REAL} = jldopen(outputPath, "r") do file
+            # precisions::Dict{String, REAL} = jldopen(output_path, "r") do file
             #     read(file, "precisions")
             # end
-            # recalls::Dict{String, REAL} = jldopen(outputPath, "r") do file
+            # recalls::Dict{String, REAL} = jldopen(output_path, "r") do file
             #     read(file, "recalls")
             # end
-            # fvalues::Dict{String, REAL} = jldopen(outputPath, "r") do file
+            # fvalues::Dict{String, REAL} = jldopen(output_path, "r") do file
             #     read(file, "fvalues")
             # end
             # precisions[tag] = prescision
@@ -144,13 +144,13 @@ module Result
             # fvalues[tag] = fvalue
         else
             precisions = Dict{String,REAL}(tag=>prescision)
-            recalls   = Dict{String,REAL}(tag=>recall)
-            fvalues   = Dict{String,REAL}(tag=>fvalue)
+            recalls    = Dict{String,REAL}(tag=>recall)
+            fvalues    = Dict{String,REAL}(tag=>fvalue)
         end
         println(precisions)
         println(recalls)
         println(fvalues)
-        jldopen(outputPath, "w") do file
+        jldopen(output_path, "w") do file
             file["precisions"] = precisions
             file["recalls"]    = recalls
             file["fvalues"]    = fvalues
@@ -158,160 +158,160 @@ module Result
     end
 
 
-    function _sort_biclustermatrix(matrix, usageR, usageC, B)
+    function _sort_biclustermatrix(matrix, usage_r, usage_c, B)
         cKeys = []
-        for c in keys(usageC)
+        for c in keys(usage_c)
             num = 0
-            for r in keys(usageR)
+            for r in keys(usage_r)
                 num += (B[r,c] == 1)
                 num -= (B[r,c] == 4)
             end
             append!(cKeys, tuple([c, num]))
         end
         sort!(cKeys, by = x -> x[2], rev = true)
-        sortR = []
-        sortC = []
-        rBreaks = []
-        cBreaks = []
+        sort_r = []
+        sort_c = []
+        r_breaks = []
+        c_breaks = []
         for x in cKeys
-            append!(sortC, usageC[x[1]])
-            push!(cBreaks, length(usageC[x[1]]))
+            append!(sort_c, usage_c[x[1]])
+            push!(c_breaks, length(usage_c[x[1]]))
         end
-        for (key, array) in usageR
-            append!(sortR, array)
-            push!(rBreaks, length(array))
+        for (key, array) in usage_r
+            append!(sort_r, array)
+            push!(r_breaks, length(array))
         end
-        for i in 1:(length(rBreaks)-1)
-            rBreaks[i+1] += rBreaks[i]
+        for i in 1:(length(r_breaks)-1)
+            r_breaks[i+1] += r_breaks[i]
         end
-        for i in 1:(length(cBreaks)-1)
-            cBreaks[i+1] += cBreaks[i]
+        for i in 1:(length(c_breaks)-1)
+            c_breaks[i+1] += c_breaks[i]
         end
-        return (matrix[sortR, sortC], rBreaks, sortR, cBreaks, sortC)
+        return (matrix[sort_r, sort_c], r_breaks, sort_r, c_breaks, sort_c)
     end
 
 
-    function _sort_biclustermatrix(matrix, usageR, usageC)
-        sortR = []
-        sortC = []
-        rBreaks = []
-        cBreaks = []
-        for (key, array) in usageR
-            append!(sortR, array)
-            push!(rBreaks, length(array))
+    function _sort_biclustermatrix(matrix, usage_r, usage_c)
+        sort_r = []
+        sort_c = []
+        r_breaks = []
+        c_breaks = []
+        for (key, array) in usage_r
+            append!(sort_r, array)
+            push!(r_breaks, length(array))
         end
-        for (key, array) in usageC
-            append!(sortC, array)
-            push!(cBreaks, length(array))
+        for (key, array) in usage_c
+            append!(sort_c, array)
+            push!(c_breaks, length(array))
         end
-        for i in 1:(length(rBreaks)-1)
-            rBreaks[i+1] += rBreaks[i]
+        for i in 1:(length(r_breaks)-1)
+            r_breaks[i+1] += r_breaks[i]
         end
-        for i in 1:(length(cBreaks)-1)
-            cBreaks[i+1] += cBreaks[i]
+        for i in 1:(length(c_breaks)-1)
+            c_breaks[i+1] += c_breaks[i]
         end
-        return (matrix[sortR, sortC], rBreaks, sortR, cBreaks, sortC)
+        return (matrix[sort_r, sort_c], r_breaks, sort_r, c_breaks, sort_c)
     end
 
-    function _view_matrix_heatmap(matrix, rBreaks, sortR, cBreaks, sortC, title;
-                              filePath = "", clim = nothing)
+    function _view_matrix_heatmap(matrix, r_breaks, sort_r, c_breaks, sort_c, title;
+                                  file_path = "", clim = nothing)
         pyplot()
-        (clim == nothing) && heatmap(yflip=true, xticks = (1:size(matrix,2),sortC),
-                             yticks = (1:size(matrix,1),sortR), matrix, title = title, size=(2000,2000), c=:Blues)
-        (clim != nothing) && heatmap(yflip=true, xticks = (1:size(matrix,2),sortC),
-                             yticks = (1:size(matrix,1),sortR), matrix, title = title, clim = clim, size=(2000,2000), c=:Blues)
-        hline!(rBreaks .+ 0.5)
-        vline!(cBreaks .+ 0.5)
-        if filePath != ""
-            savefig(filePath)
+        (clim == nothing) && heatmap(yflip=true, xticks = (1:size(matrix,2),sort_c),
+                             yticks = (1:size(matrix,1),sort_r), matrix, title = title, size=(2000,2000), c=:Blues)
+        (clim != nothing) && heatmap(yflip=true, xticks = (1:size(matrix,2),sort_c),
+                             yticks = (1:size(matrix,1),sort_r), matrix, title = title, clim = clim, size=(2000,2000), c=:Blues)
+        hline!(r_breaks .+ 0.5)
+        vline!(c_breaks .+ 0.5)
+        if file_path != ""
+            savefig(file_path)
         end
     end
 
-    function _view_f_heatmap(f, usageR, rBreaks, sortR, usageC, cBreaks, sortC, title;
-                            filePath = "")
+    function _view_f_heatmap(f, usage_r, r_breaks, sort_r, usage_c, c_breaks, sort_c, title;
+                             file_path = "")
         pyplot()
-        matrix = zeros(Float64, length(sortR), length(sortC))
+        matrix = zeros(Float64, length(sort_r), length(sort_c))
         X, Y = size(matrix)
-        R = length(sortR)
-        C = length(sortC)
+        R = length(sort_r)
+        C = length(sort_c)
         for y in 1:Y
             for x in 1:X
                 matrix[x,y] = f[y]
             end
         end
-        matrix = matrix[sortR, sortC]
-        heatmap(yflip=true, xticks = (1:size(matrix,2),sortC),
-                yticks = (1:size(matrix,1),sortR), clim = (0.7, 1.0), matrix, title = title, size=(2000,2000), c=:Blues)
-        hline!(rBreaks .+ 0.5)
-        vline!(cBreaks .+ 0.5)
-        if filePath != ""
-            savefig(filePath)
+        matrix = matrix[sort_r, sort_c]
+        heatmap(yflip=true, xticks = (1:size(matrix,2),sort_c),
+                yticks = (1:size(matrix,1),sort_r), clim = (0.7, 1.0), matrix, title = title, size=(2000,2000), c=:Blues)
+        hline!(r_breaks .+ 0.5)
+        vline!(c_breaks .+ 0.5)
+        if file_path != ""
+            savefig(file_path)
         end
     end
 
-    function _view_u_heatmap(u, usageR, rBreaks, sortR, usageC, cBreaks, sortC, title;
-                            filePath = "")
+    function _view_u_heatmap(u, usage_r, r_breaks, sort_r, usage_c, c_breaks, sort_c, title;
+                             file_path = "")
         pyplot()
-        matrix = zeros(Float64, length(sortR), length(sortC))
+        matrix = zeros(Float64, length(sort_r), length(sort_c))
         X, Y = size(matrix)
-        R = length(sortR)
-        C = length(sortC)
+        R = length(sort_r)
+        C = length(sort_c)
         for y in 1:Y
             for x in 1:X
                 matrix[x,y] = (u[y] == x)
             end
         end
-        matrix = matrix[sortR, sortC]
-        heatmap(yflip=true, xticks = (1:size(matrix,2),sortC),
-                yticks = (1:size(matrix,1),sortR), clim = (0,1), matrix, title = title, size=(2000,2000), c=:Blues)
-        hline!(rBreaks .+ 0.5)
-        vline!(cBreaks .+ 0.5)
-        if filePath != ""
-            savefig(filePath)
+        matrix = matrix[sort_r, sort_c]
+        heatmap(yflip=true, xticks = (1:size(matrix,2),sort_c),
+                yticks = (1:size(matrix,1),sort_r), clim = (0,1), matrix, title = title, size=(2000,2000), c=:Blues)
+        hline!(r_breaks .+ 0.5)
+        vline!(c_breaks .+ 0.5)
+        if file_path != ""
+            savefig(file_path)
         end
     end
 
-    function _view_a_heatmap(a, usageR, rBreaks, sortR, usageC, cBreaks, sortC, title;
-                            filePath = "")
+    function _view_a_heatmap(a, usage_r, r_breaks, sort_r, usage_c, c_breaks, sort_c, title;
+                             file_path = "")
         pyplot()
-        matrix = zeros(Float64, length(sortR), length(sortC))
+        matrix = zeros(Float64, length(sort_r), length(sort_c))
         X, Y = size(matrix)
-        R = length(sortR)
-        C = length(sortC)
+        R = length(sort_r)
+        C = length(sort_c)
         for y in 1:Y
             for x in 1:X
                 matrix[x,y] = a[x]
             end
         end
-        matrix = matrix[sortR, sortC]
-        heatmap(yflip=true, xticks = (1:size(matrix,2),sortC),
-                yticks = (1:size(matrix,1),sortR), clim = (1,2), matrix, title = title, size=(2000,2000), c=:Blues)
-        hline!(rBreaks .+ 0.5)
-        vline!(cBreaks .+ 0.5)
-        if filePath != ""
-            savefig(filePath)
+        matrix = matrix[sort_r, sort_c]
+        heatmap(yflip=true, xticks = (1:size(matrix,2),sort_c),
+                yticks = (1:size(matrix,1),sort_r), clim = (1,2), matrix, title = title, size=(2000,2000), c=:Blues)
+        hline!(r_breaks .+ 0.5)
+        vline!(c_breaks .+ 0.5)
+        if file_path != ""
+            savefig(file_path)
         end
     end
 
-    function _view_blocktype_heatmap(B, usageR, rBreaks, sortR, usageC, cBreaks, sortC, title;
-                                     filePath = "")
+    function _view_blocktype_heatmap(B, usage_r, r_breaks, sort_r, usage_c, c_breaks, sort_c, title;
+                                     file_path = "")
         pyplot()
-        matrix = zeros(Float64, length(sortR), length(sortC))
-        R = length(sortR)
-        C = length(sortC)
-        for (r,c) in Iterators.product(keys(usageR),keys(usageC))
-            for (i,j) in Iterators.product(usageR[r],usageC[c])
+        matrix = zeros(Float64, length(sort_r), length(sort_c))
+        R = length(sort_r)
+        C = length(sort_c)
+        for (r,c) in Iterators.product(keys(usage_r),keys(usage_c))
+            for (i,j) in Iterators.product(usage_r[r],usage_c[c])
                 matrix[i,j] = B[r,c]
             end
         end
-        matrix = matrix[sortR, sortC]
+        matrix = matrix[sort_r, sort_c]
         print(matrix)
-        heatmap(yflip=true, xticks = (1:size(matrix,2),sortC),
-                yticks = (1:size(matrix,1),sortR), clim = (1,4), matrix, title = title, size=(2000,2000), c=:pu_or)
-        hline!(rBreaks .+ 0.5)
-        vline!(cBreaks .+ 0.5)
-        if filePath != ""
-            savefig(filePath)
+        heatmap(yflip=true, xticks = (1:size(matrix,2),sort_c),
+                yticks = (1:size(matrix,1),sort_r), clim = (1,4), matrix, title = title, size=(2000,2000), c=:pu_or)
+        hline!(r_breaks .+ 0.5)
+        vline!(c_breaks .+ 0.5)
+        if file_path != ""
+            savefig(file_path)
         end
     end
 
@@ -348,8 +348,8 @@ module Result
         return ans
     end
 
-    function _evaluatefvalue(summaryPath::String, score::Array{REAL, 2}, thres::REAL = (REAL)(0.0))::Tuple{REAL,REAL,REAL}
-        summaryTemp::Array{REAL, 2} = InputParser.parseInputSummary(summaryPath)
+    function _evaluatefvalue(summary_path::String, score::Array{REAL, 2}, thres::REAL = (REAL)(0.0))::Tuple{REAL,REAL,REAL}
+        summaryTemp::Array{REAL, 2} = InputParser.parse_input_summary(summary_path)
         summary::Array{REAL, 2}     = zeros(size(score))
         for (x,y) in Iterators.product(1:size(summaryTemp)[1],1:size(summaryTemp)[2])
             summary[x,y] = summaryTemp[x,y]
@@ -367,17 +367,17 @@ module Result
         return (precision, recall, fvalue)
     end
 
-    function _evaluatefvalue(summaryPath::String, sampled::Sampler{INT, REAL},
+    function _evaluatefvalue(summary_path::String, sampled::Sampler{INT, REAL},
                              thres::REAL = (REAL)(0.0),
-                             rmError::Bool = true)::Tuple{REAL,REAL,REAL}
+                             rm_error::Bool = true)::Tuple{REAL,REAL,REAL}
         score::Array{REAL, 2}       = convert.(REAL, sampled.Z) .- 1.0
         S::INT, M::INT = size(score)
-        if rmError
+        if rm_error
             for (i,j) in Iterators.product(1:S, 1:M)
                 (sampled.er[j] == 2) && (score[i,j] = 0.0)
             end
         end
-        return _evaluatefvalue(summaryPath, score, thres)
+        return _evaluatefvalue(summary_path, score, thres)
     end
 
 end

@@ -1,47 +1,47 @@
 module PhylogenyTree
-    function _isPhylogenic(sortedMat::AbstractArray{I, 2},
-                          buffer2D::AbstractArray{I, 2};
-                          offset::I = (I)(0), checkDriver::Bool = false)::Bool where {I <: Integer}
-        X, Y = size(sortedMat)
-        if (X,Y) != size(buffer2D)
-            error("inconstent buffer2D size @__phylogenyTree.isPhylogenic")
+    function _isphylogenic(sorted_mat::AbstractArray{I, 2},
+                           buffer2d::AbstractArray{I, 2};
+                           offset::I = (I)(0), see_driver::Bool = false)::Bool where {I <: Integer}
+        X, Y = size(sorted_mat)
+        if (X,Y) != size(buffer2d)
+            error("inconstent buffer2d size @__phylogenyTree.isphylogenic")
         end
-        fill!(buffer2D, (I)(0))
+        fill!(buffer2d, (I)(0))
         for x in (I)(1):X
             latest = (I)(0)
             for y in (I)(1):Y
-                if sortedMat[x,y] == ((I)(1) + offset)
-                    buffer2D[x,y] = latest
+                if sorted_mat[x,y] == ((I)(1) + offset)
+                    buffer2d[x,y] = latest
                     latest = y
                 end
             end
         end
         zeroCount::I = 0
         for y in (I)(1):Y
-            Ly = maximum(buffer2D[:,y])
-            zeroCount += (I)( (Ly == 0) && ( sum(sortedMat[:,y]) > X * offset ) )
+            Ly = maximum(buffer2d[:,y])
+            zeroCount += (I)( (Ly == 0) && ( sum(sorted_mat[:,y]) > X * offset ) )
             for x in (I)(1):X
-                if sortedMat[x,y] == ((I)(1) + offset) && buffer2D[x,y] != Ly
+                if sorted_mat[x,y] == ((I)(1) + offset) && buffer2d[x,y] != Ly
                     return false
                 end
             end
         end
-        # if checkDriver; return zeroCount == 1;
+        # if see_driver; return zeroCount == 1;
         # else; return true; end
-        return (!checkDriver) || (zeroCount==1)
+        return (!see_driver) || (zeroCount==1)
     end
 
-    function _radixSort(matrix::AbstractArray{I, 2};
-                       ascendDigit::Bool = true,
-                       base::I = (I)(2),
-                       descend::Bool = false,
-                       offset::I = (I)(0))::Array{I,1} where {I <: Integer}
+    function _radixsort(matrix::AbstractArray{I, 2};
+                        ascend_digit::Bool = true,
+                        base::I = (I)(2),
+                        descend::Bool = false,
+                        offset::I = (I)(0))::Array{I,1} where {I <: Integer}
         X::I, Y::I = size(matrix)
         bucket::Array{I, 2}     = zeros(base, Y)
         bucketSize::Array{I, 1} = zeros(base)
         ans::Array{I, 1}        = collect((I)(1):Y)
         digitOrder = (I)(1):X
-        if !ascendDigit; digitOrder = X:(I)(-1):(I)(1); end
+        if !ascend_digit; digitOrder = X:(I)(-1):(I)(1); end
 
         for x in digitOrder
             # create bucket @ x pposition
@@ -70,19 +70,19 @@ module PhylogenyTree
         end
     end
 
-    function isPhylogenic(binMat::AbstractArray{I, 2};
+    function isphylogenic(binMat::AbstractArray{I, 2};
                           offset::I = (I)(0),
-                          checkDriver::Bool = false,
-                          minX::I = (I)(1), minY::I = (I)(1))::Bool where {I <: Integer}
-            # if minX == 1 || minY == 1
+                          see_driver::Bool = false,
+                          min_x::I = (I)(1), min_y::I = (I)(1))::Bool where {I <: Integer}
+            # if min_x == 1 || min_y == 1
                 # error("refactoring not done")
             # end
             X,Y = size(binMat)
-            if X < minX || Y < minY
+            if X < min_x || Y < min_y
                 return false
             end
-            orderY::Array{I, 1} = _radixSort(binMat,ascendDigit = true, base = (I)(2), descend = true, offset = offset)
-            buffer2D = fill((I)(0), X, Y)
-            return _isPhylogenic( view((binMat), (I)(1):X, orderY), buffer2D, offset = offset, checkDriver = checkDriver)
+            orderY::Array{I, 1} = _radixsort(binMat,ascend_digit = true, base = (I)(2), descend = true, offset = offset)
+            buffer2d = fill((I)(0), X, Y)
+            return _isphylogenic( view((binMat), (I)(1):X, orderY), buffer2d, offset = offset, see_driver = see_driver)
     end
 end

@@ -1,19 +1,19 @@
 let
     global Include
-    existingFiles = Set{AbstractString}([])
+    existing_files = Set{AbstractString}([])
     function Include(path::AbstractString, guard::Bool = true)
         if guard
-            if (path ∉ existingFiles)
+            if (path ∉ existing_files)
                 print("include the julia file of: "); println(path)
                 include(path)
-                push!(existingFiles, path)
+                push!(existing_files, path)
             else
                 print("avoid re-inclusion of the julia file of: "); println(path)
-                println(existingFiles)
+                println(existing_files)
             end
         else
             include(path)
-            push!(existingFiles, path)
+            push!(existing_files, path)
         end
     end
 end

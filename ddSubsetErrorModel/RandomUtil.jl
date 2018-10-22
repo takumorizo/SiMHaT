@@ -1,7 +1,7 @@
-Include("config.jl")
+# Include("config.jl")
 
 module RandomUtil
-    using ..config
+    # using ..config
     using Distributions
 
     export sample_multinomial, sample_beta

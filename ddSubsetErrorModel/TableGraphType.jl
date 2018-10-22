@@ -7,65 +7,65 @@ module TableGraphType
         W::Array{R, 2}
     end
 
-    function init(vertexSize::I, distance::Array{R, 2})::TableGraph{I, R} where {I <: Integer, R <: Real}
-        @assert size(distance)[1] == vertexSize && size(distance)[2] == vertexSize
-        g::TableGraph{I, R} = TableGraph{I,R}(zeros(I, vertexSize, vertexSize), vertexSize, distance)
-        for n in (I)(1):vertexSize
+    function init(vertex_size::I, distance::Array{R, 2})::TableGraph{I, R} where {I <: Integer, R <: Real}
+        @assert size(distance)[1] == vertex_size && size(distance)[2] == vertex_size
+        g::TableGraph{I, R} = TableGraph{I,R}(zeros(I, vertex_size, vertex_size), vertex_size, distance)
+        for n in (I)(1):vertex_size
             g.E[n, n] = (I)(1)
         end
         return g
     end
 
-    function DFS!(g::TableGraph{I}, from::I, S::Set{I}, both = true)::Nothing where {I <: Integer}
+    function dfs!(g::TableGraph{I}, from::I, S::Set{I}, both = true)::Nothing where {I <: Integer}
         push!(S, from)
         for to in (I)(1):g.V
-            ( g.E[to, from] == (I)(1) && to ∉ S ) && (DFS!(g, (I)(to), S, both))
-            ( both && g.E[from, to] == (I)(1) && to ∉ S ) && (DFS!(g, (I)(to), S, both))
+            ( g.E[to, from] == (I)(1) && to ∉ S ) && (dfs!(g, (I)(to), S, both))
+            ( both && g.E[from, to] == (I)(1) && to ∉ S ) && (dfs!(g, (I)(to), S, both))
         end
         return nothing
     end
 
-    function rmEdge!(g::TableGraph{I}, from::I, to::I)::Nothing where {I <: Integer}
+    function rmedge!(g::TableGraph{I}, from::I, to::I)::Nothing where {I <: Integer}
         g.E[to, from] = (I)(0)
         return nothing
     end
 
-    function addEdge!(g::TableGraph{I}, from::I, to::I)::Nothing where {I <: Integer}
+    function addedge!(g::TableGraph{I}, from::I, to::I)::Nothing where {I <: Integer}
         g.E[to, from] = (I)(1)
         return nothing
     end
 
-    function getLink(g::TableGraph{I}, i::I) where {I <: Integer}
+    function getlink(g::TableGraph{I}, i::I) where {I <: Integer}
         # return findfirst(g.E[:, i], (I)(1))
         return something(findfirst(isequal((I)(1)), g.E[:, i]), 0)
     end
 
 
-    function diffGroup!(g::TableGraph{I, R},
-                        S_pp::Set{I}, S_pn::Set{I}, S_np::Set{I}, S_nn::Set{I},
+    function diffgroup!(g::TableGraph{I, R},
+                        s_pp::Set{I}, s_pn::Set{I}, s_np::Set{I}, s_nn::Set{I},
                         from::I, to_prev::I, to_next::I; both = true)::Nothing where {I <: Integer, R <: Real}
-        DFS!(g, to_prev, S_pp, both)
-        DFS!(g, to_next, S_pn, both)
+        dfs!(g, to_prev, s_pp, both)
+        dfs!(g, to_next, s_pn, both)
 
-        if from ∈ S_pp && from ∈ S_pn
-            while length(S_pn) > 0
-                pop!(S_pn)
+        if from ∈ s_pp && from ∈ s_pn
+            while length(s_pn) > 0
+                pop!(s_pn)
             end
         end
 
-        rmEdge!(g, from, to_prev)
-        addEdge!(g, from, to_next)
+        rmedge!(g, from, to_prev)
+        addedge!(g, from, to_next)
 
-        DFS!(g, to_prev, S_np, both)
-        DFS!(g, to_next, S_nn, both)
+        dfs!(g, to_prev, s_np, both)
+        dfs!(g, to_next, s_nn, both)
 
-        if from ∈ S_np && from ∈ S_nn
-            while length(S_nn) > 0
-                pop!(S_nn)
+        if from ∈ s_np && from ∈ s_nn
+            while length(s_nn) > 0
+                pop!(s_nn)
             end
         end
-        rmEdge!(g, from, to_next)
-        addEdge!(g, from, to_prev)
+        rmedge!(g, from, to_next)
+        addedge!(g, from, to_prev)
         return nothing
     end
 end
