@@ -1,4 +1,3 @@
-Include("config.jl")
 Include("BuffPhyloMatrixType.jl")
 Include("SamplerType.jl")
 Include("InputParser.jl")
@@ -7,7 +6,6 @@ module Result
     using Plots
     using ..SamplerType
     using JLD2, FileIO
-    using ..config
     using ..InputParser
 
     function writejld(smax, lnprobs, jldpath)
@@ -110,17 +108,18 @@ module Result
         _view_blocktype_heatmap(smax.B, smax.usage_s, rbreak, sort_r, smax.usage_v, cbreak, sort_c, "MAP.B", file_path = output_dir * "/MAP_B.png")
     end
 
-    function evaluatefvalue(summary_path::String, score_path::String, thres::REAL = (REAL)(0.0), rm_error::Bool = true)::Tuple{REAL,REAL,REAL}
+    function evaluatefvalue(summary_path::String, score_path::String, thres::REAL = (REAL)(0.0), rm_error::Bool = true,
+                            INT::Type{<:Integer} = Int32)::Tuple{REAL,REAL,REAL} where {REAL <: Real}
         if endswith(score_path, "jld2")
             sampled::Sampler{INT, REAL}, lnprobs::Array{REAL, 1} = readjld(score_path)
             return _evaluatefvalue(summary_path, sampled, thres, rm_error)
         else
             score::Array{REAL, 2}       = InputParser.parse_input_summary(score_path)
-            return _evaluatefvalue(summary_path, score, thres)
+            return _evaluatefvalue(summary_path, score, thres, INT)
         end
     end
 
-    function savefvalue(output_path::String, prescision::REAL, recall::REAL, fvalue::REAL, tag::String)
+    function savefvalue(output_path::String, prescision::REAL, recall::REAL, fvalue::REAL, tag::String) where {REAL <: Real}
         @assert endswith(output_path, "jld2")
         if isfile(output_path)
             println(load(output_path))
@@ -348,7 +347,8 @@ module Result
         return ans
     end
 
-    function _evaluatefvalue(summary_path::String, score::Array{REAL, 2}, thres::REAL = (REAL)(0.0))::Tuple{REAL,REAL,REAL}
+    function _evaluatefvalue(summary_path::String, score::Array{REAL, 2}, thres::REAL = (REAL)(0.0),
+                             INT::Type{<:Integer} = Int32)::Tuple{REAL,REAL,REAL} where {REAL <: Real}
         summaryTemp::Array{REAL, 2} = InputParser.parse_input_summary(summary_path)
         summary::Array{REAL, 2}     = zeros(size(score))
         for (x,y) in Iterators.product(1:size(summaryTemp)[1],1:size(summaryTemp)[2])
@@ -369,7 +369,7 @@ module Result
 
     function _evaluatefvalue(summary_path::String, sampled::Sampler{INT, REAL},
                              thres::REAL = (REAL)(0.0),
-                             rm_error::Bool = true)::Tuple{REAL,REAL,REAL}
+                             rm_error::Bool = true)::Tuple{REAL,REAL,REAL} where {INT <: Integer, REAL <: Real}
         score::Array{REAL, 2}       = convert.(REAL, sampled.Z) .- 1.0
         S::INT, M::INT = size(score)
         if rm_error
@@ -377,7 +377,7 @@ module Result
                 (sampled.er[j] == 2) && (score[i,j] = 0.0)
             end
         end
-        return _evaluatefvalue(summary_path, score, thres)
+        return _evaluatefvalue(summary_path, score, thres, INT)
     end
 
 end

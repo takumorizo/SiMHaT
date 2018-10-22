@@ -1,8 +1,6 @@
-Include("config.jl")
 
 module InputParser
     using ConfParser
-    using ..config
 
     export Parameters
     export Annealer
@@ -33,7 +31,9 @@ module InputParser
         ln_p_v::Array{R, 1} # error block state penalty, [prob_valid, prob_invalid]
     end
 
-    function parse_config_file(config_file::String)::Tuple{Parameters{INT, REAL}, Annealer{INT, REAL}}
+    function parse_config_file(config_file::String,
+                               INT::Type{<:Integer} = Int32,
+                               REAL::Type{<:Real}   = Float32)::Tuple{Parameters{INT, REAL}, Annealer{INT, REAL}}
         conf = ConfParse(config_file)
         parse_conf!(conf)
         println(conf)
@@ -86,7 +86,9 @@ module InputParser
                Annealer{INT, REAL}(period, ln_p_ladders))
     end
 
-    function parse_input_summary(summary_path::String)::Array{REAL, 2}
+    function parse_input_summary(summary_path::String,
+                                 INT::Type{<:Integer} = Int32,
+                                 REAL::Type{<:Real}   = Float32)::Array{REAL, 2}
         ans = []
         isFirst = true
         open(summary_path, "r") do f

@@ -1,4 +1,3 @@
-Include("config.jl")
 Include("InputParser.jl")
 Include("RandomUtil.jl")
 Include("BuffPhyloMatrixType.jl")
@@ -9,7 +8,6 @@ Include("DistanceParser.jl")
 ddSubsetErrorModel sampling script
 """
 module SamplerType
-    using ..config
     using ..InputParser
     using ..RandomUtil
     using ..BuffPhyloMatrixType
@@ -955,9 +953,10 @@ module SamplerType
 
     # DONE: L, S, usage_s ->  L^(1), L^(2), S^(1)_s S^(2)_s, usage_s^(1), usage_s^(2)
     # DONE: Use different distance matix for L_s and L_n
-    function init(err_score_path::String, pat_score_path::String, mat_score_path::String, param_path::String)
-        ln_p_d::Array{REAL, 3}   = _parseData(err_score_path, pat_score_path, mat_score_path)
-        param::Parameters{INT,REAL}, anneal::Annealer{INT, REAL} = InputParser.parse_config_file(param_path::String)
+    function init(err_score_path::String, pat_score_path::String, mat_score_path::String, param_path::String,
+                  INT::Type{<:Integer} = Int32, REAL::Type{<:Real} = Float32)
+        ln_p_d::Array{REAL, 3}   = _parseData(err_score_path, pat_score_path, mat_score_path, INT, REAL)
+        param::Parameters{INT,REAL}, anneal::Annealer{INT, REAL} = InputParser.parse_config_file(param_path, INT, REAL)
         println("=========== data matrix ==========")
         println(ln_p_d)
         println("==================================")
@@ -968,11 +967,12 @@ module SamplerType
         Z::Array{INT, 2}   = convert.(INT, fill(1,S,M)) # init ℤ, Z[i,j] ∈ {1,2}, 1: error, 2: tumor
         H::Array{INT, 2}   = convert.(INT, fill(1,S,M)) # init H, H[i,j] ∈ {1,2}, 1: mat,   2: pat
 
-        D_s::Array{REAL, 2}  = DistanceParser.parse_bf_hamming_distance(err_score_path, pat_score_path, mat_score_path, param_path, "alpha_s")
-        decayfunction_s = DistanceParser.parse_decayfunction(param_path)
+        D_s::Array{REAL, 2}  = DistanceParser.parse_bf_hamming_distance(err_score_path, pat_score_path, mat_score_path, param_path, "alpha_s", INT, REAL)
+        decayfunction_s = DistanceParser.parse_decayfunction(param_path, INT = INT, REAL = REAL)
         D_n::Array{REAL, 2}  = DistanceParser.parse_bf_hamming_distance(err_score_path, pat_score_path, mat_score_path, param_path, "alpha_n")
         decayfunction_n = DistanceParser.parse_decayfunction(param_path, distance_tag = "distance",
-                                                             decay_function_tag = "decayFunctionNest", decay_rate_tag = "decayRateNest")
+                                                             decay_function_tag = "decayFunctionNest", decay_rate_tag = "decayRateNest",
+                                                             INT = INT, REAL = REAL)
         for (i,j) in Iterators.product((INT)(1):S,(INT)(1):S)
             (i != j) && ( D_s[i,j] = decayfunction_s(D_s[i,j]))
             (i != j) && ( D_n[i,j] = decayfunction_n(D_n[i,j]))
@@ -1013,8 +1013,9 @@ module SamplerType
     end
 
     function exec_map(err_scores::String, mat_scores::String, pat_scores::String, ini_file::String;
-                      seed::I = (I)(0), iter::I = (I)(100000), thin::I = (I)(10), burnin::I = (I)(10)) where {I <: Integer}
-        samp = SamplerType.init(err_scores, mat_scores, pat_scores, ini_file)
+                      seed::INT = (I)(0), iter::INT = (I)(100000), thin::INT = (I)(10), burnin::INT = (I)(10),
+                      REAL::Type{<:Real} = Float32) where {INT <: Integer}
+        samp = SamplerType.init(err_scores, mat_scores, pat_scores, ini_file, INT, REAL)
         map, ln_probs = SamplerType.sample_map!(samp, seed = seed, iter = iter, thin = thin, burnin = burnin)
         return (map, ln_probs)
     end
@@ -1038,7 +1039,8 @@ module SamplerType
     #
     function _parseData(err_score_path::String,
                         pat_score_path::String,
-                        mat_score_path::String)::Array{REAL, 3}
+                        mat_score_path::String,
+                        INT::Type{<:Integer} = Int32, REAL::Type{<:Real}=Float32)::Array{REAL, 3}
         err_score::Array{REAL, 2} = InputParser.parse_input_summary(err_score_path)
         mat_score::Array{REAL, 2} = InputParser.parse_input_summary(mat_score_path)
         pat_score::Array{REAL, 2} = InputParser.parse_input_summary(pat_score_path)

@@ -1,7 +1,6 @@
 module SiMHaT
     include("include.jl")
     Include("Result.jl")
-    Include("config.jl")
     Include("SamplerType.jl")
 
     using .SamplerType
@@ -9,12 +8,11 @@ module SiMHaT
     using DocOpt
     using Plots
     using Dates
-    using .config
     pyplot()
 
     export pingResult
 
-    function run()
+    function run(INT::Type{<:Integer} = Int32, REAL::Type{<:Real} = Float32)
         nowTime = (Dates.value(Dates.now())) #Int(Dates.now())
         cwd = pwd()
         doc = """ddSubsetErrorModel
@@ -41,11 +39,12 @@ module SiMHaT
 
         if args["MAP"] == "MAP"
             @time smax, lnprobs  = SamplerType.exec_map(args["<errScore>"], args["<matScore>"], args["<patScore>"], args["<iniFile>"],
-                                                        seed = parse(INT, args["--seed"]), iter = parse(INT, args["--number"]), thin = parse(INT, args["--thin"]), burnin = parse(INT, args["--burnin"]))
+                                                        seed = parse(INT, args["--seed"]), iter = parse(INT, args["--number"]), thin = parse(INT, args["--thin"]), burnin = parse(INT, args["--burnin"]),
+                                                        REAL = REAL)
             Result.writejld(smax, lnprobs, args["--outDir"] * "/sampleAns.jld2")
             Result.viewmap(smax, lnprobs, args["--outDir"])
         elseif args["EVAL"] == "EVAL"
-            precision, recall, fvalue = Result.evaluatefvalue(args["<answer>"], args["<score>"], parse(REAL, args["--threshold"]), args["--rmError"])
+            precision, recall, fvalue = Result.evaluatefvalue(args["<answer>"], args["<score>"], parse(REAL, args["--threshold"]), args["--rmError"], INT)
             println((precision, recall, fvalue))
             Result.savefvalue(args["<result>"], precision, recall, fvalue, String(args["--tag"]))
         end
