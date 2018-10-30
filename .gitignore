@@ -1,0 +1,9 @@
+classTest.jl
+simpleModel.jl
+simpleModelMCMC.jl
+testPlots.jl
+debug/
+evaluate/
+simpleModel/
+subsetErrorModel/
+uniqueFounderModel/
